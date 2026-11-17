@@ -1,6 +1,15 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return
 
+  // sdk → backend isteklerinde müşterinin gerçek IP'si (istek sınırları için; lib/client-ip.ts)
+  const { installClientIpHeadersProvider } = await import("./lib/server-client-ip")
+  installClientIpHeadersProvider()
+  if (process.env.NODE_ENV === "production" && !process.env.STOREFRONT_PROXY_SECRET) {
+    console.warn(
+      "[escay-storefront] STOREFRONT_PROXY_SECRET yok — backend istek sınırları tüm müşteriler için tek sayaç olur."
+    )
+  }
+
   const url = process.env.MEDUSA_BACKEND_URL
   const pub = process.env.NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY
   const region = process.env.NEXT_PUBLIC_MEDUSA_REGION_ID

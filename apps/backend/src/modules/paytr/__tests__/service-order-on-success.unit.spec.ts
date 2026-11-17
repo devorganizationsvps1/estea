@@ -38,11 +38,19 @@ describe("PayTR provider: sipariş yalnız ödeme başarılıysa", () => {
     expect(res.status).toBe("authorized")
   })
 
-  it("stub oturum yerel test için eski yolda kalır", async () => {
+  it("stub oturum (mock) yerel test için eski yolda kalır", async () => {
+    process.env.PAYTR_MOCK = "1"
     const res = await provider().authorizePayment({
       data: { merchant_oid: "M1", paytr_status: "pending", _stub: true },
     } as never)
     expect(res.status).toBe("pending_authorization")
+  })
+
+  it("gerçek kimlikle istemcinin yazdığı _stub yok sayılır", async () => {
+    const res = await provider().authorizePayment({
+      data: { merchant_oid: "M1", paytr_status: "pending", _stub: true, manual_review: true },
+    } as never)
+    expect(res.status).toBe("requires_more")
   })
 
   it("mağaza API'sinden gelen paytr_status dikkate alınmaz", async () => {

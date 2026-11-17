@@ -6,6 +6,8 @@ import {
   type MedusaAddressLike,
 } from "@escay/shared/checkout-address"
 import { isValidEmail } from "../../api/store/orders/_shared"
+import { ALLOWED_STORE_PAYMENT_PROVIDERS } from "../../api/store/_payment-session-guard"
+import { scriptPaymentProvidersAllowed } from "../../lib/checkout-provider-override"
 
 /**
  * Sipariş oluşmadan önce sepetin son süzgeci (mağaza formu aynı kuralları önceden çalıştırır;
@@ -18,6 +20,19 @@ import { isValidEmail } from "../../api/store/orders/_shared"
  *    BizimHesap'ta düzeltilemez (sorgu / silme yok), o yüzden burada kesilir.
  */
 completeCartWorkflow.hooks.validate(({ cart }) => {
+  // Ödeme sağlayıcısı: Medusa pp_system_default'u her zaman kaydeder ve kendiliğinden
+  // "authorized" sayar → ödemesiz sipariş. Mağaza rotası da süzer (_payment-session-guard);
+  // burası workflow'u doğrudan tetikleyen her yol için ikinci kilit.
+  const sessions =
+    ((cart as { payment_collection?: { payment_sessions?: { provider_id?: string | null }[] | null } | null })
+      ?.payment_collection?.payment_sessions ?? [])
+  const badProvider =
+    !sessions.length ||
+    sessions.some((s) => !s?.provider_id || !ALLOWED_STORE_PAYMENT_PROVIDERS.has(s.provider_id))
+  if (badProvider && !scriptPaymentProvidersAllowed()) {
+    throw new MedusaError(MedusaError.Types.NOT_ALLOWED, "Bu ödeme yöntemi kullanılamıyor.")
+  }
+
   const email = typeof cart?.email === "string" ? cart.email : ""
   if (!email.trim()) {
     throw new MedusaError(MedusaError.Types.INVALID_DATA, "email required")

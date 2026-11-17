@@ -10,6 +10,16 @@ import {
 
 const AUTH_PASSWORD = "StagingSmoke2026!a"
 
+/**
+ * İstek sınırı sayaçlarını ayırmak için sahte müşteri IP'si. Backend yalnız
+ * STOREFRONT_PROXY_SECRET eşleşirse x-escay-client-ip'e güvenir (X-Forwarded-For'a
+ * artık güvenmez); sır yoksa tüm istekler betiği çalıştıran makinenin IP'sine düşer.
+ */
+function rateLimitIpHeaders(ip: string): Record<string, string> {
+  const secret = process.env.STOREFRONT_PROXY_SECRET?.trim()
+  return secret ? { "x-escay-client-ip": ip, "x-escay-proxy-secret": secret } : {}
+}
+
 export async function runAuthSuite(env: StagingEnv) {
   section("7. Auth (register → verify gate → rate-limit)")
 
@@ -23,7 +33,7 @@ export async function runAuthSuite(env: StagingEnv) {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-forwarded-for": rlIp,
+        ...rateLimitIpHeaders(rlIp),
       },
       body: JSON.stringify({ email, password: AUTH_PASSWORD }),
     }
@@ -56,7 +66,7 @@ export async function runAuthSuite(env: StagingEnv) {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-forwarded-for": rlIp,
+        ...rateLimitIpHeaders(rlIp),
       },
       body: JSON.stringify({ email, password: AUTH_PASSWORD }),
     }
@@ -130,7 +140,7 @@ export async function runAuthSuite(env: StagingEnv) {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-forwarded-for": burnIp,
+        ...rateLimitIpHeaders(burnIp),
       },
       body: JSON.stringify({
         email: `ratelimit-${i}@escay.test`,
@@ -161,7 +171,7 @@ export async function runAuthSuite(env: StagingEnv) {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          "x-forwarded-for": regIp,
+          ...rateLimitIpHeaders(regIp),
         },
         body: JSON.stringify({
           email: uniqueEmail(`rl${i}`),

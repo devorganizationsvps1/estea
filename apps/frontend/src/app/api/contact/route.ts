@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 import { backendUrl } from "@/lib/medusa"
+import { clientIpFrom, clientIpHeadersFrom } from "@/lib/client-ip"
 
 const WINDOW_MS = 10 * 60 * 1000
 const MAX_ATTEMPTS = 12
 const hits = new Map<string, number[]>()
 
 function clientKey(req: NextRequest): string {
-  const forwarded = req.headers.get("x-forwarded-for")
-  return forwarded?.split(",")[0]?.trim() || "unknown"
+  return clientIpFrom((name) => req.headers.get(name)) || "unknown"
 }
 
 function rateLimited(key: string): boolean {
@@ -68,6 +68,7 @@ export async function POST(req: NextRequest) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        ...clientIpHeadersFrom((name) => req.headers.get(name)),
         ...(publishableKey
           ? { "x-publishable-api-key": publishableKey }
           : {}),

@@ -2,13 +2,63 @@ import { loadEnv, defineConfig } from "@medusajs/framework/utils"
 
 loadEnv(process.env.NODE_ENV || "development", process.cwd())
 
+// Veritabanı TLS'i. Dokploy iç ağındaki Postgres'te (postgres:5432) TLS yok →
+// DATABASE_SSL tanımsız/false iken kapalı. Dış/yönetilen bir Postgres'e
+// geçilirse DATABASE_SSL=true: sertifika doğrulanır (rejectUnauthorized),
+// özel CA gerekirse DATABASE_SSL_CA (PEM metni; \n kaçışları kabul edilir).
+function databaseSsl(): false | { rejectUnauthorized: true; ca?: string } {
+  const flag = (process.env.DATABASE_SSL ?? "").trim().toLowerCase()
+  if (flag === "" || flag === "false" || flag === "0") return false
+  if (flag !== "true" && flag !== "1" && flag !== "require") {
+    throw new Error(`DATABASE_SSL geçersiz: "${process.env.DATABASE_SSL}" (true | false bekleniyor)`)
+  }
+  const ca = process.env.DATABASE_SSL_CA?.replace(/\\n/g, "\n").trim()
+  return ca ? { rejectUnauthorized: true, ca } : { rejectUnauthorized: true }
+}
+
+// JWT_SECRET / COOKIE_SECRET tanımsızsa Medusa "supersecret" kullanır; bunu yalnız
+// NODE_ENV=production engeller. NODE_ENV Dokploy'da ezilirse açık geri gelir →
+// sunucu yerel olmayan bir veritabanına bağlanıyorsa (ya da production'da) zayıf
+// veya eksik sır ile açılmayı reddet. `medusa build` DATABASE_URL olmadan çalışır,
+// yerel geliştirme localhost kullanır; ikisi de etkilenmez.
+function assertStrongSecrets(): void {
+  const dbUrl = process.env.DATABASE_URL ?? ""
+  let dbHost = ""
+  try {
+    dbHost = dbUrl ? new URL(dbUrl).hostname : ""
+  } catch {
+    dbHost = ""
+  }
+  const localDb = dbHost === "" || dbHost === "localhost" || dbHost === "127.0.0.1" || dbHost === "::1"
+  const isProd = process.env.NODE_ENV === "production" || process.env.NODE_ENV === "prod"
+  if (!isProd && localDb) return
+
+  const weak = new Set(["supersecret", "secret", "test", "changeme", "change-me", "change-me-jwt-secret", "change-me-cookie-secret"])
+  const problems: string[] = []
+  for (const name of ["JWT_SECRET", "COOKIE_SECRET"] as const) {
+    const value = (process.env[name] ?? "").trim()
+    if (!value) problems.push(`${name} tanımsız`)
+    else if (weak.has(value.toLowerCase())) problems.push(`${name} varsayılan/yer tutucu değerde`)
+    else if (value.length < 32) problems.push(`${name} 32 karakterden kısa`)
+  }
+  if (!problems.length && process.env.JWT_SECRET!.trim() === process.env.COOKIE_SECRET!.trim()) {
+    problems.push("JWT_SECRET ile COOKIE_SECRET aynı")
+  }
+  if (problems.length) {
+    throw new Error(`Güvensiz oturum sırları (${problems.join("; ")}). Üret: openssl rand -base64 32`)
+  }
+}
+
+assertStrongSecrets()
+
 module.exports = defineConfig({
   projectConfig: {
     databaseUrl: process.env.DATABASE_URL,
-    // Docker / internal Postgres has no TLS; Medusa otherwise forces SSL for non-localhost hosts.
+    // Medusa yerel olmayan hostlarda SSL'i rejectUnauthorized:false ile zorlar;
+    // bunun yerine açıkça seçiyoruz (bkz. databaseSsl).
     databaseDriverOptions: {
       connection: {
-        ssl: false,
+        ssl: databaseSsl(),
       },
     },
     redisUrl: process.env.REDIS_URL,

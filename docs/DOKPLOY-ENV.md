@@ -49,6 +49,9 @@ JWT_SECRET=<openssl rand -base64 32>
 COOKIE_SECRET=<openssl rand -base64 32, farklı>
 # İkisi de en az 32 karakter ve birbirinden farklı olmalı; aksi halde backend açılmaz
 # (medusa-config.ts → assertStrongSecrets).
+# Mağaza sunucusu müşterinin gerçek IP'sini bu sırla iletir (istek sınırları müşteri
+# başına tutulsun diye). frontend'deki değerle AYNI olmalı; yoksa tüm müşteriler tek sayaç.
+STOREFRONT_PROXY_SECRET=<openssl rand -base64 32>
 # HTTP döneminde zorunlu; TLS gelince SİL
 COOKIE_SECURE=false
 
@@ -151,6 +154,11 @@ NEXT_PUBLIC_GOOGLE_ADS_CONVERSION_LABEL=
 NEXT_PUBLIC_META_PIXEL_ID=
 NEXT_PUBLIC_CLARITY_ID=
 NEXT_PUBLIC_OMNISEND_BRAND_ID=
+```
+Yalnız **Environment**'a (Build-time Arguments'a YAZMA — imaj katmanına gömülür):
+```
+# backend'deki STOREFRONT_PROXY_SECRET ile aynı değer
+STOREFRONT_PROXY_SECRET=<backend ile aynı>
 ```
 Takip ID'leri boşken hiçbir script yüklenmez; CookieYes banner'ı da çıkmaz. Doğrulama: `http://<frontend>/api/build-info`.
 

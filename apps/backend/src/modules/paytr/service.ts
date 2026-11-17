@@ -399,7 +399,11 @@ class PaytrProviderService extends AbstractPaymentProvider<PaytrOptions> {
       }
     }
 
-    if (data._stub !== true) {
+    // _stub yalnız initiatePayment'ın stub dalı (mock / kimliksiz) için anlamlı. Gerçek
+    // kimlikle çalışan ortamda istemcinin oturum data'sına yazdığı _stub yok sayılır.
+    const stubAllowed =
+      isPaytrMockEnabled() || !this.merchantId || !this.merchantKey || !this.merchantSalt
+    if (data._stub !== true || !stubAllowed) {
       this.logger_.warn(
         `[paytr] authorizePayment: ödenmemiş oturumla sipariş isteği reddedildi (merchant_oid=${data.merchant_oid})`
       )

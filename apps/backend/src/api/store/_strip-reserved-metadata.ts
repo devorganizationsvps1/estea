@@ -11,10 +11,18 @@ import type {
  * Satır metadata'sındaki ağırlık/boyut → kargo fiyatı ve gerçek gönderi paketi.
  * Bu anahtarlar yalnızca sunucu (import, admin) tarafından yazılır; istekten silinir.
  *
- * İstemcinin yazabildiği sepet anahtarları: payment_method, marketing_consent,
- * tracking_consent, legal_accepted_at, order_note.
+ * Sepet için izinli liste: siparişe kopyalanan metadata'da sunucunun karar verdiği
+ * anahtarlar (bizimhesap_invoice, contracts, label_printed_at, escay_*, paytr_refund …)
+ * istemciden gelirse fatura/sözleşme atlanır, sipariş kargo sayacından düşer. Bu yüzden
+ * yalnız mağazanın yazdığı anahtarlar geçer; yenisi eklenirse buraya da eklenmeli.
  */
-const CART_RESERVED = new Set(["source"])
+const CART_ALLOWED = new Set([
+  "payment_method",
+  "marketing_consent",
+  "tracking_consent",
+  "legal_accepted_at",
+  "order_note",
+])
 const LINE_ITEM_RESERVED = new Set(["weight_kg", "weight_g", "weight", "length", "width", "height"])
 
 function strip(metadata: unknown, isReserved: (key: string) => boolean): void {
@@ -32,5 +40,30 @@ function makeStripper(isReserved: (key: string) => boolean) {
   }
 }
 
-export const stripReservedCartMetadata = makeStripper((key) => CART_RESERVED.has(key))
-export const stripReservedLineItemMetadata = makeStripper((key) => LINE_ITEM_RESERVED.has(key))
+function stripItems(items: unknown): void {
+  if (!Array.isArray(items)) return
+  for (const item of items) {
+    strip((item as { metadata?: unknown } | null)?.metadata, isLineItemReserved)
+  }
+}
+
+const isLineItemReserved = (key: string) => LINE_ITEM_RESERVED.has(key)
+const isCartReserved = (key: string) => !CART_ALLOWED.has(key)
+
+/** POST /store/carts ve /store/carts/:id — sepet metadata'sı + (oluşturmada) items[].metadata */
+export function stripReservedCartMetadata(
+  req: MedusaRequest,
+  _res: MedusaResponse,
+  next: MedusaNextFunction
+) {
+  for (const body of [
+    req.body as { metadata?: unknown; items?: unknown } | undefined,
+    (req as { validatedBody?: { metadata?: unknown; items?: unknown } }).validatedBody,
+  ]) {
+    strip(body?.metadata, isCartReserved)
+    stripItems(body?.items)
+  }
+  next()
+}
+
+export const stripReservedLineItemMetadata = makeStripper(isLineItemReserved)

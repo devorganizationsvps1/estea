@@ -17,6 +17,7 @@ import {
   stripReservedCartMetadata,
   stripReservedLineItemMetadata,
 } from "./store/_strip-reserved-metadata"
+import { guardStorePaymentSession } from "./store/_payment-session-guard"
 import { lookupRateLimit } from "./store/orders/lookup/rate-limit"
 import { exchangeOptionsRateLimit } from "./store/returns/exchange-options/rate-limit"
 import {
@@ -229,6 +230,12 @@ export default defineMiddlewares({
       matcher: "/admin/returns/:id/accept",
       methods: ["POST"],
       middlewares: [ensureReturnReceiveLocation],
+    },
+    // Ödeme oturumu: yalnız PayTR; data izinli alanlarla sınırlı (bkz. _payment-session-guard)
+    {
+      matcher: "/store/payment-collections/:id/payment-sessions",
+      methods: ["POST"],
+      middlewares: [guardStorePaymentSession],
     },
     // İstemci metadata'sından sunucu kontrol anahtarlarını sil (bkz. _strip-reserved-metadata)
     {

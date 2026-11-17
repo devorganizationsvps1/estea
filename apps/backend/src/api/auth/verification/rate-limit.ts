@@ -3,6 +3,7 @@ import type {
   MedusaRequest,
   MedusaResponse,
 } from "@medusajs/framework/http"
+import { clientIp } from "../../store/_rate-limit"
 
 /**
  * In-memory rate limit for verification email resend.
@@ -14,11 +15,7 @@ const MAX_ATTEMPTS = 5
 const hits = new Map<string, number[]>()
 
 function clientKey(req: MedusaRequest): string {
-  const forwarded = req.headers["x-forwarded-for"]
-  const ip =
-    (typeof forwarded === "string" ? forwarded.split(",")[0] : undefined)?.trim() ||
-    req.ip ||
-    "unknown"
+  const ip = clientIp(req)
   const authContext = (req as MedusaRequest & {
     auth_context?: { auth_identity_id?: string }
   }).auth_context

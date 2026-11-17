@@ -1,4 +1,5 @@
 import Medusa from "@medusajs/js-sdk"
+import { currentClientIpHeaders, needsClientIp } from "./client-ip"
 
 /** Dynamic key lookup — Next.js must not inline these at build time (Docker runtime env). */
 function env(key: string): string | undefined {
@@ -13,12 +14,24 @@ export function backendUrl(): string {
   )
 }
 
+type ClientFetch = (input: unknown, init?: { headers?: Record<string, string | null> } & Record<string, unknown>) => Promise<unknown>
+
 function createSdk(): Medusa {
-  return new Medusa({
+  const instance = new Medusa({
     baseUrl: backendUrl(),
     debug: process.env.NODE_ENV === "development",
     publishableKey: env("NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY"),
   })
+  // İstek sınırlı uçlara müşterinin gerçek IP'sini ekle (sdk.auth.* de client.fetch'i kullanır).
+  const client = instance.client as unknown as { fetch: ClientFetch }
+  const original = client.fetch.bind(client)
+  client.fetch = async (input, init) => {
+    if (!needsClientIp(input)) return original(input, init)
+    const extra = await currentClientIpHeaders()
+    if (!Object.keys(extra).length) return original(input, init)
+    return original(input, { ...init, headers: { ...extra, ...(init?.headers || {}) } })
+  }
+  return instance
 }
 
 let sdkInstance: Medusa | undefined

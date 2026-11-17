@@ -23,6 +23,7 @@
  *      SIM_SELF_FULFILL=1 → backend'in olay dinleyicisini bekleme, kargo kayıtlarını script açsın
  *      (backend SHIPPING_CARRIER=dhl ile ÇALIŞMIYORSA; çalışıyorsa kullanmayın, çift kayıt riski).
  */
+import { allowScriptPaymentProviders } from "../lib/checkout-provider-override"
 import type { ExecArgs, MedusaContainer } from "@medusajs/framework/types"
 import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils"
 import {
@@ -50,6 +51,8 @@ import { CARRIER_PROVIDER_ID } from "../modules/carrier/types"
 
 const SIM_METADATA_KEY = "escay_simulation"
 const SYSTEM_PAYMENT_PROVIDER = "pp_system_default"
+// Simülasyon siparişleri system sağlayıcısıyla açılır; checkout kilidi yalnız bu süreçte gevşer.
+allowScriptPaymentProviders()
 
 type Address = { first: string; last: string; phone: string; address1: string; city: string; district: string; postal: string; neighbourhood?: string }
 

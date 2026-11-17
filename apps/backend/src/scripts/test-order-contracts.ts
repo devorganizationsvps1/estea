@@ -13,6 +13,7 @@
  * S3 hatası → Logs kaydı, S3 env yok, admin route yetkisiz erişim.
  */
 
+import { allowScriptPaymentProviders } from "../lib/checkout-provider-override"
 import { DeleteObjectCommand, HeadObjectCommand, S3Client } from "@aws-sdk/client-s3"
 import type { ExecArgs, MedusaContainer } from "@medusajs/framework/types"
 import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils"
@@ -38,6 +39,9 @@ import {
   type OrderContractsMeta,
 } from "../lib/order-contracts"
 import orderPlacedHandler from "../subscribers/order-placed"
+
+// Havale senaryosu PayTR dışı sağlayıcı kullanır; checkout kilidi yalnız bu süreçte gevşer.
+allowScriptPaymentProviders()
 
 const BACKEND = process.env.MEDUSA_BACKEND_URL || "http://localhost:9000"
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
