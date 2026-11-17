@@ -33,11 +33,11 @@ jest.mock("../../../../lib/paytr-checkout", () => ({
 import { sendPaytrCriticalAlert } from "../../../../lib/paytr-compensate"
 import { POST } from "../route"
 
-async function callback(status: string) {
+async function callback(status: string, extra: Record<string, string> = {}) {
   const logger = { info: jest.fn(), warn: jest.fn(), error: jest.fn() }
   const locking = { execute: async (_key: unknown, job: () => Promise<unknown>) => job() }
   const req = {
-    body: { merchant_oid: "Mpayses123abc", status, total_amount: "12345", hash: "h" },
+    body: { merchant_oid: "Mpayses123abc", status, total_amount: "12345", hash: "h", ...extra },
     scope: { resolve: (name: string) => (name === "logger" ? logger : locking) },
   }
   const res = { status: jest.fn().mockReturnThis(), send: jest.fn() }
@@ -66,5 +66,17 @@ describe("PayTR callback: ödeme oturumu bulunamadı", () => {
     const res = await callback("failed")
     expect(sendPaytrCriticalAlert).not.toHaveBeenCalled()
     expect(res.send).toHaveBeenCalledWith("OK")
+  })
+
+  it("canlı modda (PAYTR_TEST_MODE=0) test kartı bildirimi işlenmez", async () => {
+    const prev = process.env.PAYTR_TEST_MODE
+    process.env.PAYTR_TEST_MODE = "0"
+    try {
+      const res = await callback("success", { test_mode: "1" })
+      expect(sendPaytrCriticalAlert).not.toHaveBeenCalled()
+      expect(res.send).toHaveBeenCalledWith("OK")
+    } finally {
+      process.env.PAYTR_TEST_MODE = prev
+    }
   })
 })

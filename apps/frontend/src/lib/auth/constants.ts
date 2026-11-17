@@ -16,6 +16,20 @@ export const LAST_ORDER_ID_COOKIE = "_escay_last_order_id"
  * ödenen sepetin kimliği (yalnız /store/paytr-checkout/status için).
  */
 export const PAYTR_PAID_CART_COOKIE = "_escay_paytr_cart"
+/**
+ * Bu tarayıcıya verilen PayTR iframe_token'ı. Ödeme sayfası URL'deki token'ı yalnız bu
+ * çerezle eşleşirse açar: başkasının PayTR hesabından alınmış token'la hazırlanan
+ * bağlantı gerçek alan adında yabancı bir ödeme formu gösteremesin.
+ */
+export const PAYTR_IFRAME_TOKEN_COOKIE = "_escay_paytr_token"
+
+export const PAYTR_IFRAME_TOKEN_COOKIE_OPTIONS = {
+  path: "/odeme",
+  sameSite: "lax" as const,
+  httpOnly: true,
+  secure: cookieSecureFlag(),
+  maxAge: 60 * 60, // 1 saat — PayTR iframe oturumu bundan kısa
+}
 
 export const LAST_ORDER_COOKIE_MAX_AGE = 60 * 60 * 24 // 24h
 

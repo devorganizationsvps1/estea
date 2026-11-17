@@ -68,9 +68,11 @@ export function checkPaytrEnv(env: NodeJS.ProcessEnv = process.env): PaytrEnvRep
   }
 
   // 4. Test modunda uyarılar.
-  if (!live && !prefix && isProd) {
-    warnings.push(
-      "PAYTR_TEST_MODE=1 ve PAYTR_OID_PREFIX boş — canlı görünümlü env test modunda; " +
+  // Prod'da test modu yalnız canlı dışı ortam işaretiyle (önek): öneksiz test modu canlı
+  // ortamda test kartlarıyla imzalı "başarılı" ödeme → gerçek sipariş/fatura/kargo demektir.
+  if (testMode === "1" && !prefix && isProd) {
+    errors.push(
+      "PAYTR_TEST_MODE=1 ve PAYTR_OID_PREFIX boş — canlı görünümlü env test modunda (test kartı sipariş açar); " +
         "staging ise PAYTR_OID_PREFIX=STG yazın, canlıysa PAYTR_TEST_MODE=0."
     )
   }

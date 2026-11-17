@@ -296,6 +296,23 @@ describe("kargo webhook → sipariş durumu", () => {
     ])
   })
 
+  it("adaptör sırrı kontrol etmese de rota sır olmadan işlemez", async () => {
+    resetCarrierAdapters()
+    registerCarrierAdapter({ ...fakeAdapter, parseWebhook: (req) => fakeAdapter.parseWebhook!({ ...req, headers: { "x-carrier-secret": "s3cret" } }) })
+    const { container, fulfillmentModule } = makeContainer(fresh())
+    const res = await postWebhook(container, notice("SHIPPED"), "yanlis")
+    expect(res.body).toEqual({ ok: false, reason: "rejected" })
+    expect(fulfillmentModule.updateFulfillment).not.toHaveBeenCalled()
+  })
+
+  it("CARRIER_WEBHOOK_SECRET tanımsızsa webhook kapalı", async () => {
+    process.env.CARRIER_WEBHOOK_SECRET = ""
+    const { container, fulfillmentModule } = makeContainer(fresh())
+    const res = await postWebhook(container, notice("SHIPPED"), "")
+    expect(res.body).toEqual({ ok: false, reason: "rejected" })
+    expect(fulfillmentModule.updateFulfillment).not.toHaveBeenCalled()
+  })
+
   it("adaptör yoksa (elle kargo) webhook 200 + no carrier adapter", async () => {
     resetCarrierAdapters()
     const { container } = makeContainer(fresh())

@@ -73,6 +73,7 @@ takip linki, Logs uyarısı), `order.canceledShipmentRefs` (reship'te yeni refer
 4. Seed: `npm run setup:turkey` shipping option provider'ını `carrier_carrier` yapar (env'e göre);
    `set-shipping-price-type` ile `calculated` yapılmışsa seed bunu korur.
 5. Webhook varsa firma paneline `https://api.<domain>/carrier/webhook?token=<CARRIER_WEBHOOK_SECRET>`;
+   Rota (`api/carrier/webhook`) `CARRIER_WEBHOOK_SECRET` tanımsızsa ya da `x-carrier-secret` / `?token=` uyuşmazsa bildirimi adaptöre hiç vermez; adaptörün `parseWebhook`'u yine de firma imzasını doğrulamalı.
    webhook yalnız hızlandırıcıdır, `getStatus` yoklaması (30 dk) asıl kaynak.
 6. Koli profili: `SHIPPING_PACKAGE_DEFAULT` + varyant `metadata.weight_kg` (çay gramajı); ilk etikette
    desi kontrolü.

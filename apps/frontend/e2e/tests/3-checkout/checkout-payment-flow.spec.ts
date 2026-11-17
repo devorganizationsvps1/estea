@@ -55,10 +55,11 @@ test.describe("3c. Checkout adım akışı (Yol C)", () => {
     await checkout.firstName.fill("GeriKoruma")
     await page.waitForTimeout(1400)
 
+    // Bu tarayıcıya verilmemiş token: iframe açılmaz, GERİ bağlantısı yine çalışır.
     const token = "e2eGeriBack1"
     const payment = new PaymentPage(page)
     await payment.gotoStubToken(token)
-    await payment.expectIframeForToken(token)
+    await expect(payment.iframe).toHaveCount(0)
     await payment.goBackToAddress()
     await waitForPageLoaderGone(page)
 
@@ -76,22 +77,29 @@ test.describe("3c. Checkout adım akışı (Yol C)", () => {
     })
   })
 
-  test("ödeme adımında F5 → iframe hâlâ render (stub token path)", async ({
+  test("ödeme adımında F5 → iframe hâlâ render (gerçek akış token'ı)", async ({
     page,
   }) => {
-    const token = "e2eReloadTok"
-    const payment = new PaymentPage(page)
-    await payment.gotoStubToken(token)
-    await payment.expectIframeForToken(token)
+    test.setTimeout(120_000)
+    await skipSiteOverlays(page)
+    await seedGuestCartCookie(page)
 
+    const checkout = new CheckoutPage(page)
+    await checkout.goto()
+    await expect(checkout.email).toBeVisible({ timeout: 20_000 })
+    await checkout.fillGuestAddress(uniqueEmail("f5"))
+    await page.waitForTimeout(1200)
+    await checkout.selectFirstShippingIfPresent()
+    await checkout.submitAndWaitForPaymentOrConfirmation()
+    test.skip(!/\/odeme\/payment\//.test(page.url()), "PayTR token yok (stub onay akışı)")
+
+    const payment = new PaymentPage(page)
+    await payment.expectIframeForToken(/.+/)
+    const url = page.url()
     await page.reload({ waitUntil: "domcontentloaded" })
     await waitForPageLoaderGone(page)
-    await payment.expectIframeForToken(token)
-    await expect(page).toHaveURL(new RegExp(`/odeme/payment/${token}`))
-    test.info().annotations.push({
-      type: "iframe",
-      description: "stub token path — PaytrIframe render, get-token yok",
-    })
+    await payment.expectIframeForToken(/.+/)
+    await expect(page).toHaveURL(url)
   })
 
   test("/odeme/payment/[geçersiz-token] → güvenlik reddi", async ({

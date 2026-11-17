@@ -29,6 +29,8 @@ import {
   LAST_ORDER_EMAIL_COOKIE,
   LAST_ORDER_ID_COOKIE,
   PAYTR_PAID_CART_COOKIE,
+  PAYTR_IFRAME_TOKEN_COOKIE,
+  PAYTR_IFRAME_TOKEN_COOKIE_OPTIONS,
   LAST_ORDER_COOKIE_OPTIONS,
 } from "./auth/constants"
 import { getAuthToken } from "./auth/session"
@@ -544,6 +546,8 @@ export async function saveCheckoutContactAction(input: {
 
   // Cookie yazımı bitti — redirect try/catch DIŞINDA (NEXT_REDIRECT yutulmasın).
   if (paytrToken) {
+    const jar = await cookies()
+    jar.set(PAYTR_IFRAME_TOKEN_COOKIE, paytrToken, PAYTR_IFRAME_TOKEN_COOKIE_OPTIONS)
     redirect(`/odeme/payment/${paytrToken}`)
   }
 

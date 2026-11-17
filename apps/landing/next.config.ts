@@ -5,8 +5,22 @@ import type { NextConfig } from 'next'
 // sunucusu JS/HMR isteklerini engeller; sayfa hydrate olmaz, menü açılmaz.
 const lanDevOrigins = ['192.168.*.*', '10.*.*.*', '172.*.*.*', '*.local']
 
+// Temel güvenlik başlıkları (storefront ile aynı taban). CSP bilerek yalnız
+// frame-ancestors: başka sitenin landing'i çerçeveye alıp tıklatmasını (clickjacking)
+// engeller; script izin listesi ayrıca test edilmeden konmaz.
+// HSTS yalnız HTTPS'te etkilidir (Traefik TLS); HTTP/IP erişiminde tarayıcı yok sayar.
+const securityHeaders = [
+  { key: 'Strict-Transport-Security', value: 'max-age=31536000' },
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  { key: 'Content-Security-Policy', value: "frame-ancestors 'self'" },
+  { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+]
+
 const nextConfig: NextConfig = {
   allowedDevOrigins: lanDevOrigins,
+  poweredByHeader: false,
   images: {
     // AVIF destekleyen tarayıcıya AVIF (WebP'den ~%20-30 küçük), diğerine WebP.
     formats: ['image/avif', 'image/webp'],
@@ -18,6 +32,7 @@ const nextConfig: NextConfig = {
   transpilePackages: ['@estea/ui'],
   async headers() {
     return [
+      { source: '/:path*', headers: securityHeaders },
       // Adı sabit public dosyaları (logo, desen): Next varsayılanı max-age=0, her
       // sayfa açılışında sunucuya sorulur. Bir saat taze, bir gün arka planda yenilenir.
       {

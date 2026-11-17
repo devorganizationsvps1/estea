@@ -19,19 +19,15 @@ test.describe("3. Checkout", () => {
     ).toBeVisible({ timeout: 20_000 })
   })
 
-  test("ödeme route iframe render (sepete bakmaz)", async ({ page }) => {
+  test("bu tarayıcıya verilmemiş token → iframe açılmaz (yabancı ödeme formu yok)", async ({ page }) => {
     const token = "e2ePaytrToken1"
     await page.goto(`/odeme/payment/${token}`, {
       waitUntil: "domcontentloaded",
     })
     await expect(page.getByRole("heading", { name: "Ödeme" })).toBeVisible()
     await expect(page.getByTestId("checkout-payment")).toBeVisible()
-    const iframe = page.getByTestId("paytr-iframe")
-    await expect(iframe).toBeVisible()
-    await expect(iframe).toHaveAttribute(
-      "src",
-      `https://www.paytr.com/odeme/guvenli/${token}`
-    )
+    await expect(page.getByTestId("paytr-iframe")).toHaveCount(0)
+    await expect(page.getByTestId("checkout-payment-expired")).toBeVisible()
     await expect(page.getByTestId("checkout-payment-back")).toHaveAttribute(
       "href",
       "/odeme"

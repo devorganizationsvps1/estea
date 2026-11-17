@@ -18,6 +18,24 @@ import {
   stripReservedLineItemMetadata,
 } from "./store/_strip-reserved-metadata"
 import { guardStorePaymentSession } from "./store/_payment-session-guard"
+import { createRateLimiter } from "./store/_rate-limit"
+
+// Şifre değiştirme: mevcut şifre doğrulanır → çalınmış oturumla şifre tahmini hesap başına sınırlı.
+const passwordChangeRateLimit = createRateLimiter({
+  name: "customer-password-change",
+  maxAttempts: Number(process.env.PASSWORD_CHANGE_RATE_MAX || 5),
+  windowMs: Number(process.env.PASSWORD_CHANGE_RATE_WINDOW_MS || 15 * 60 * 1000),
+  message: "Çok fazla deneme. Lütfen birkaç dakika sonra tekrar deneyin.",
+  key: (req) =>
+    String((req as { auth_context?: { actor_id?: string } }).auth_context?.actor_id || "anon"),
+})
+
+const carrierWebhookRateLimit = createRateLimiter({
+  name: "carrier-webhook",
+  maxAttempts: Number(process.env.CARRIER_WEBHOOK_RATE_MAX || 300),
+  windowMs: Number(process.env.CARRIER_WEBHOOK_RATE_WINDOW_MS || 60 * 1000),
+  message: "Too many requests.",
+})
 import { lookupRateLimit } from "./store/orders/lookup/rate-limit"
 import { exchangeOptionsRateLimit } from "./store/returns/exchange-options/rate-limit"
 import {
@@ -117,11 +135,11 @@ export default defineMiddlewares({
       middlewares: [paytrCallbackRateLimit],
     },
     // Kargo firması durum webhook'u: AUTH yok — firma sunucusu erişmeli.
-    // Doğrulama adaptörün parseWebhook'unda (CARRIER_WEBHOOK_SECRET / imza).
+    // Doğrulama rotada (CARRIER_WEBHOOK_SECRET) + adaptörün parseWebhook'unda (imza).
     {
       matcher: "/carrier/webhook",
       methods: ["POST"],
-      middlewares: [],
+      middlewares: [carrierWebhookRateLimit],
     },
     // Deploy doğrulama — AUTH yok (CACHE_BUST / git commit kontrolü)
     {
@@ -271,6 +289,7 @@ export default defineMiddlewares({
       methods: ["POST"],
       middlewares: [
         authenticate("customer", ["session", "bearer"]),
+        passwordChangeRateLimit,
         validateAndTransformBody(StoreChangePassword),
       ],
     },

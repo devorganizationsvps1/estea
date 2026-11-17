@@ -65,10 +65,13 @@ describe("paytr env-guard", () => {
     expect(dev.warnings.some((w) => w.includes("PAYTR_MOCK açık"))).toBe(true)
   })
 
-  it("prod'da test modu + önek boş → uyarı (canlı görünümlü env test modunda)", () => {
+  it("prod'da test modu + önek boş → hata (test kartı canlıda sipariş açmasın)", () => {
     const r = checkPaytrEnv({ NODE_ENV: "production", PAYTR_TEST_MODE: "1", ...CREDS })
-    expect(r.errors).toEqual([])
-    expect(r.warnings.some((w) => w.includes("PAYTR_OID_PREFIX boş"))).toBe(true)
+    expect(r.errors.some((e) => e.includes("PAYTR_OID_PREFIX boş"))).toBe(true)
+    const staging = checkPaytrEnv({ NODE_ENV: "production", PAYTR_TEST_MODE: "1", PAYTR_OID_PREFIX: "STG", ...CREDS })
+    expect(staging.errors).toEqual([])
+    const dev = checkPaytrEnv({ NODE_ENV: "development", PAYTR_TEST_MODE: "1", ...CREDS })
+    expect(dev.errors).toEqual([])
   })
 
   it("strict: production ya da PAYTR_ENV_STRICT=1", () => {

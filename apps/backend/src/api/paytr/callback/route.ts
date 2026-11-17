@@ -120,6 +120,16 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
     return
   }
 
+  // Canlı modda (PAYTR_TEST_MODE=0) test kartıyla yapılmış "başarılı" ödeme para getirmez:
+  // sipariş açılmaz. "OK" dönülür ki PayTR aynı bildirimi tekrar göndermesin.
+  if (status === "success" && String(body.test_mode ?? "").trim() === "1" && (process.env.PAYTR_TEST_MODE ?? "").trim() === "0") {
+    logger?.error(
+      `[paytr/callback] Canlı modda test_mode=1 başarılı bildirim — sipariş açılmadı (merchant_oid=${merchantOid})`
+    )
+    res.status(200).send("OK")
+    return
+  }
+
   // ── 2–5. Lock + idempotency + process ────────────────────────────────
   try {
     // Redis kilidi: ttl boyunca tutulur (sipariş + tahsilat + abonelikler 30 sn'yi aşabilir).

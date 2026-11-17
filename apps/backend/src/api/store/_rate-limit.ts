@@ -51,6 +51,8 @@ export function createRateLimiter(options: {
   windowMs: number
   /** Optional 429 body message (generic — do not include account identifiers). */
   message?: string
+  /** Sayaç anahtarı; varsayılan müşteri IP'si (ör. hesap başına sınır için actor_id). */
+  key?: (req: MedusaRequest) => string
 }) {
   const hits = new Map<string, number[]>()
   const { maxAttempts, windowMs, name } = options
@@ -62,7 +64,7 @@ export function createRateLimiter(options: {
     res: MedusaResponse,
     next: MedusaNextFunction
   ) {
-    const key = `${name}:${clientKey(req)}`
+    const key = `${name}:${options.key ? options.key(req) : clientKey(req)}`
     const now = Date.now()
     const recent = (hits.get(key) || []).filter((t) => now - t < windowMs)
 

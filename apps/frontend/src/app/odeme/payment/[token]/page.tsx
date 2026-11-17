@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { cookies } from "next/headers"
 import { notFound } from "next/navigation"
 import { CheckoutProgress } from "@/components/cart/CheckoutProgress"
 import { CheckoutOrderSummary } from "@/components/checkout/CheckoutOrderSummary"
@@ -6,6 +7,7 @@ import { PaytrIframe } from "@/components/PaytrIframe"
 import { cartLineImage, variantLabel } from "@/components/cart/cart-utils"
 import { loadCheckoutBootstrap } from "@/lib/checkout-actions"
 import { isSafePaytrIframeToken } from "@/lib/paytr-iframe-token"
+import { PAYTR_IFRAME_TOKEN_COOKIE } from "@/lib/auth/constants"
 
 export const dynamic = "force-dynamic"
 
@@ -25,6 +27,10 @@ export default async function CheckoutPaymentPage({
   if (!isSafePaytrIframeToken(token)) {
     notFound()
   }
+
+  // Token yalnız bu tarayıcıya verildiyse açılır (bkz. PAYTR_IFRAME_TOKEN_COOKIE).
+  const issuedToken = (await cookies()).get(PAYTR_IFRAME_TOKEN_COOKIE)?.value
+  const tokenIssuedHere = issuedToken === token
 
   const { cart } = await loadCheckoutBootstrap()
   const hasCart = Boolean(cart?.id && (cart.items || []).length)
@@ -105,9 +111,16 @@ export default async function CheckoutPaymentPage({
                   Kart bilgileriniz Esçay&rsquo;a ulaşmaz; PayTR&rsquo;nin 3D Secure
                   sayfasında işlenir. Ödeme tamamlanınca siparişiniz otomatik oluşur.
                 </p>
-                <div className="checkout-payment__frame">
-                  <PaytrIframe iframeToken={token} />
-                </div>
+                {tokenIssuedHere ? (
+                  <div className="checkout-payment__frame">
+                    <PaytrIframe iframeToken={token} />
+                  </div>
+                ) : (
+                  <p className="checkout-payment__lead" data-testid="checkout-payment-expired">
+                    Bu ödeme oturumu bulunamadı ya da süresi doldu. Adres adımına dönüp
+                    ödemeye yeniden geçin.
+                  </p>
+                )}
               </section>
 
               <div className="checkout-payment__foot">

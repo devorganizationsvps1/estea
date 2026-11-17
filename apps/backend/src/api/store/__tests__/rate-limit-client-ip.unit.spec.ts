@@ -52,4 +52,22 @@ describe("clientIp (istek sınırı anahtarı)", () => {
     expect(run("88.1.1.1")).toBe(false)
     expect(run("88.2.2.2")).toBe(true)
   })
+
+  it("key verilirse sayaç ona göre tutulur (hesap başına)", () => {
+    const limit = createRateLimiter({
+      name: "k",
+      maxAttempts: 1,
+      windowMs: 60_000,
+      key: (r) => String((r as { auth_context?: { actor_id?: string } }).auth_context?.actor_id),
+    })
+    const run = (actor: string, ip: string) => {
+      const res = { status: jest.fn().mockReturnThis(), json: jest.fn() }
+      const next = jest.fn()
+      limit({ headers: {}, ip, auth_context: { actor_id: actor } } as never, res as never, next)
+      return next.mock.calls.length === 1
+    }
+    expect(run("cus_1", "1.1.1.1")).toBe(true)
+    expect(run("cus_1", "2.2.2.2")).toBe(false)
+    expect(run("cus_2", "1.1.1.1")).toBe(true)
+  })
 })

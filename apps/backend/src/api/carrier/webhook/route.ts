@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto"
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { ContainerRegistrationKeys } from "@medusajs/framework/utils"
 import { getConfiguredCarrier, listCarrierAdapters } from "../../../modules/carrier/registry"
@@ -9,10 +10,26 @@ import { findFulfillmentByCarrierRef } from "../../../lib/shipping/open-fulfillm
 /**
  * POST /carrier/webhook[?carrier=<kod>][&token=…]
  *
- * AUTH yok (firma sunucusu çağırır). Doğrulama adaptörün `parseWebhook`'unda
- * (CARRIER_WEBHOOK_SECRET / imza). Her zaman 200: firma tekrar denemesin;
- * işlenemeyen bildirimler Logs'a düşer.
+ * AUTH yok (firma sunucusu çağırır). İki kat doğrulama:
+ *  1. Burada: CARRIER_WEBHOOK_SECRET tanımlı olmalı ve `x-carrier-secret` başlığı ya da
+ *     `?token=` ile eşleşmeli (sabit süreli karşılaştırma). Sır yoksa webhook kapalıdır;
+ *     yeni bir adaptörün parseWebhook'u sırrı kontrol etmeyi unutsa da sipariş durumu
+ *     dışarıdan değiştirilemez.
+ *  2. Adaptörün `parseWebhook`'u (firma imzası, gövde doğrulaması).
+ * Her zaman 200: firma tekrar denemesin; işlenemeyen bildirimler Logs'a düşer.
  */
+export function carrierWebhookSecretOk(req: Pick<MedusaRequest, "headers" | "query">): boolean {
+  const expected = process.env.CARRIER_WEBHOOK_SECRET?.trim()
+  if (!expected) return false
+  const header = req.headers["x-carrier-secret"]
+  const token = (req.query as Record<string, unknown> | undefined)?.token
+  const given = typeof header === "string" && header ? header : typeof token === "string" ? token : ""
+  if (!given) return false
+  const a = Buffer.from(given)
+  const b = Buffer.from(expected)
+  return a.length === b.length && timingSafeEqual(a, b)
+}
+
 export async function POST(req: MedusaRequest, res: MedusaResponse) {
   const logger = req.scope.resolve(ContainerRegistrationKeys.LOGGER)
   const code = String((req.query as Record<string, unknown>).carrier ?? "").toLowerCase()
@@ -23,15 +40,19 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
   }
 
   let parsed: CarrierWebhook | null = null
-  try {
-    parsed = adapter.parseWebhook({
-      headers: req.headers as Record<string, string | string[] | undefined>,
-      query: req.query as Record<string, unknown>,
-      body: req.body,
-      rawBody: (req as { rawBody?: string | Buffer }).rawBody,
-    })
-  } catch (error) {
-    logger.warn(`[carrier-webhook] ${adapter.code} ayrıştırılamadı: ${errorText(error)}`)
+  if (!carrierWebhookSecretOk(req)) {
+    logger.warn(`[carrier-webhook] ${adapter.code}: CARRIER_WEBHOOK_SECRET tanımsız ya da uyuşmadı`)
+  } else {
+    try {
+      parsed = adapter.parseWebhook({
+        headers: req.headers as Record<string, string | string[] | undefined>,
+        query: req.query as Record<string, unknown>,
+        body: req.body,
+        rawBody: (req as { rawBody?: string | Buffer }).rawBody,
+      })
+    } catch (error) {
+      logger.warn(`[carrier-webhook] ${adapter.code} ayrıştırılamadı: ${errorText(error)}`)
+    }
   }
   if (!parsed) {
     await recordOpsEvent(req.scope, {
