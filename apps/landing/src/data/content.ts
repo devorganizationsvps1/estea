@@ -327,12 +327,19 @@ export const contact = {
   lead: 'Siparişiniz, sorunuz ya da bir öneriniz mi var? Hafta içi müşteri hizmetlerimiz sizi dinliyor.',
   phone: { label: '0462 692 30 61', href: 'tel:+904626923061' },
   hours: 'Hafta içi 09.00–18.00',
-  address: ['Balaban Mah. Uğurlu Cad. No: 9', 'Merkez, Hayrat / Trabzon'],
-  mapHref: 'https://www.google.com/maps/search/?api=1&query=Balaban+Mah.+U%C4%9Furlu+Cad.+No%3A9+Hayrat+Trabzon',
-  istanbul: {
-    address: ['Yıldırım Mah. Şehit Kamil Balkan Cad.', 'Bayrampaşa / İstanbul'],
-    mapHref: 'https://www.google.com/maps?q=41.065407,28.886883',
-  },
+  /** İlki fabrika (Hakkımızda'daki Fabrika bölümü de onu kullanır). */
+  locations: [
+    {
+      label: 'Fabrika',
+      address: ['Balaban Mah. Uğurlu Cad. No: 9', 'Merkez, Hayrat / Trabzon'],
+      mapHref: 'https://www.google.com/maps/search/?api=1&query=Balaban+Mah.+U%C4%9Furlu+Cad.+No%3A9+Hayrat+Trabzon',
+    },
+    {
+      label: 'İstanbul',
+      address: ['Yıldırım Mah. Şehit Kamil Balkan Cad. No: 130-136A', 'Bayrampaşa / İstanbul'],
+      mapHref: 'https://www.google.com/maps?q=41.065407,28.886883',
+    },
+  ],
   socials: [
     { label: 'Instagram', href: 'https://www.instagram.com/esteacay/' },
     { label: 'Facebook', href: 'https://www.facebook.com/esteacay/' },

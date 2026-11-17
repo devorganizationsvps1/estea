@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent } from 'react'
-import Image from 'next/image'
+import Image from '@/components/ui/Img'
 import { collection, products, type Tone } from '@/data/content'
 import { Glass, Sprig, Teapot, type Doodle } from '@/components/ui/Doodles'
 import BlobBg from '@/components/ui/BlobBg'

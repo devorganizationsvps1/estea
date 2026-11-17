@@ -1,6 +1,6 @@
 'use client'
 
-import Image from 'next/image'
+import Image from '@/components/ui/Img'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { navLinks, shopProductsUrl } from '@/lib/site'

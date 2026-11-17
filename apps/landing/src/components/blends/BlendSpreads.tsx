@@ -1,4 +1,4 @@
-import Image from 'next/image'
+import Image from '@/components/ui/Img'
 import { blends, page } from '@/data/blends'
 import Btn from '@/components/ui/Btn'
 import FactList from '@/components/ui/FactList'

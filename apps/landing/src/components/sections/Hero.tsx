@@ -1,12 +1,13 @@
 'use client'
 
-import Image from 'next/image'
+import Image from '@/components/ui/Img'
 import { useEffect, useRef } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 import { hero } from '@/data/content'
 import { shopUrl } from '@/lib/site'
+import { mediaFile } from '@/lib/media'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -47,11 +48,12 @@ export default function Hero() {
 
     let cancelled = false
     let isSeeking = false
-    let trigger: ScrollTrigger | undefined
+    let videoReady = false
+    let progress = 0
     const nav = document.getElementById('main-nav')
 
     const applySeek = () => {
-      if (cancelled || isSeeking || video.readyState < 2) return
+      if (cancelled || !videoReady || isSeeking || video.readyState < 2) return
       const target = targetTimeRef.current
       if (Math.abs(target - video.currentTime) < SEEK_EPSILON) return
       isSeeking = true
@@ -71,9 +73,10 @@ export default function Hero() {
       }
     }
 
-    const render = (progress: number) => {
-      if (poster) poster.style.opacity = String(1 - clamp01(progress / POSTER_FADE_END))
-      const op = heroTextOpacity(progress)
+    const render = (p: number) => {
+      // Video hazır değilse fotoğraf kalır; altında boş kare görünmesin.
+      if (poster) poster.style.opacity = videoReady ? String(1 - clamp01(p / POSTER_FADE_END)) : '1'
+      const op = heroTextOpacity(p)
       if (textRef.current) {
         textRef.current.style.opacity = String(op)
         textRef.current.style.pointerEvents = op < 0.05 ? 'none' : ''
@@ -84,65 +87,97 @@ export default function Hero() {
       }
     }
 
-    const setupScrub = () => {
-      if (cancelled) return
+    const sync = () => {
       const duration = video.duration
-      if (!Number.isFinite(duration) || duration <= 0) return
-      targetTimeRef.current = 0
-      try {
-        video.currentTime = 0
-      } catch {
-        /* ignore */
-      }
-      // Pinned until the wrapper has scrolled fully past, so the section after
-      // the hero slides up over the still-scrubbing video and covers it.
-      trigger = ScrollTrigger.create({
-        trigger: wrapper,
-        start: 'top top',
-        end: 'bottom top',
-        pin,
-        pinSpacing: false,
-        scrub: 0.6,
-        anticipatePin: 1,
-        invalidateOnRefresh: true,
-        onRefresh: (self) => render(self.progress),
-        onUpdate: (self) => {
-          targetTimeRef.current = self.progress * duration
-          applySeek()
-          render(self.progress)
-        },
-      })
-      ScrollTrigger.refresh()
+      targetTimeRef.current = Number.isFinite(duration) && duration > 0 ? progress * duration : 0
+      applySeek()
+      render(progress)
     }
+
+    // Pin video beklemeden kurulur: sayfa yüklenmeden kaydıran da sabit hero'yu görür.
+    // Pinned until the wrapper has scrolled fully past, so the section after
+    // the hero slides up over the still-scrubbing video and covers it.
+    const trigger = ScrollTrigger.create({
+      trigger: wrapper,
+      start: 'top top',
+      end: 'bottom top',
+      pin,
+      pinSpacing: false,
+      scrub: 0.6,
+      anticipatePin: 1,
+      invalidateOnRefresh: true,
+      onRefresh: (self) => {
+        progress = self.progress
+        render(progress)
+      },
+      onUpdate: (self) => {
+        progress = self.progress
+        sync()
+      },
+    })
 
     const onReady = () => {
-      if (!Number.isFinite(video.duration) || video.duration <= 0) return
+      if (cancelled || !Number.isFinite(video.duration) || video.duration <= 0) return
       // Decode the first frame so scrubbing starts from a warm decoder; the poster stays visible meanwhile.
-      void video
-        .play()
-        .then(() => {
-          video.pause()
-          setupScrub()
-        })
-        .catch(setupScrub)
+      const done = () => {
+        if (cancelled) return
+        video.pause()
+        videoReady = true
+        sync()
+      }
+      void video.play().then(done, done)
     }
+    video.addEventListener('loadedmetadata', onReady)
 
-    const begin = () => {
-      if (cancelled) return
-      video.addEventListener('loadedmetadata', onReady)
+    // Dikey telefonda karenin yalnız ortası görünür: 540×720 orta kırpım, 1,4 MB
+    // (tam kare 2,9 MB). <source media> yalnız bir kez değerlendirildiği için
+    // kaynak burada seçilir ve ekran döndürülünce yeniden seçilir.
+    const portrait = window.matchMedia('(max-aspect-ratio: 3/4) and (max-width: 639px)')
+    let started = false
+    const pickSource = () => {
+      // Hash'li kopya: bir yıl önbelleklenir, ikinci ziyarette video ağdan inmez.
+      const src = mediaFile(portrait.matches ? '/hero_scrub_m.mp4' : '/hero_scrub.mp4')
+      if (video.getAttribute('src') === src) return
+      videoReady = false
+      isSeeking = false
+      render(progress)
       video.preload = 'auto'
-      if (video.readyState >= 1) onReady()
-      else video.load()
+      video.src = src // src atamak yüklemeyi kendisi başlatır; load() gerekmez.
+    }
+    const onOrientation = () => {
+      if (started) pickSource()
+    }
+    portrait.addEventListener('change', onOrientation)
+
+    // Açılış fotoğrafıyla bant genişliği paylaşmasın: indirme sayfa yüklenince
+    // ya da kullanıcı kaydırmaya başlayınca (hangisi önce olursa) başlar.
+    const begin = () => {
+      if (cancelled || started) return
+      started = true
+      window.removeEventListener('load', begin)
+      window.removeEventListener('scroll', begin)
+      window.removeEventListener('touchstart', begin)
+      window.removeEventListener('wheel', begin)
+      pickSource()
     }
     if (document.readyState === 'complete') begin()
-    else window.addEventListener('load', begin, { once: true })
+    else {
+      window.addEventListener('load', begin, { once: true })
+      window.addEventListener('scroll', begin, { once: true, passive: true })
+      window.addEventListener('touchstart', begin, { once: true, passive: true })
+      window.addEventListener('wheel', begin, { once: true, passive: true })
+    }
 
     return () => {
       cancelled = true
       window.removeEventListener('load', begin)
+      window.removeEventListener('scroll', begin)
+      window.removeEventListener('touchstart', begin)
+      window.removeEventListener('wheel', begin)
+      portrait.removeEventListener('change', onOrientation)
       video.removeEventListener('loadedmetadata', onReady)
       video.pause()
-      trigger?.kill()
+      trigger.kill()
       if (poster) poster.style.opacity = ''
       if (nav) {
         nav.style.opacity = ''
@@ -188,16 +223,12 @@ export default function Hero() {
         className="absolute inset-0 h-full w-full object-cover"
         muted
         playsInline
-        // Açılış fotoğrafıyla bant genişliği paylaşmasın; indirme sayfa yüklenince başlar.
+        // Kaynak efektte seçilir (ekran oranına göre); o ana dek hiçbir şey indirilmez.
         preload="none"
         disablePictureInPicture
         aria-hidden="true"
         tabIndex={-1}
-      >
-        {/* Dikey ekranda karenin yalnız ortası görünür: 540×720 orta kırpım, 1,4 MB (tam kare 2,9 MB). */}
-        <source src="/hero_scrub_m.mp4" type="video/mp4" media="(max-aspect-ratio: 3/4)" />
-        <source src="/hero_scrub.mp4" type="video/mp4" />
-      </video>
+      />
       {/* The opening photograph sits over the video and is faded out by the scroll. */}
       <Image
         ref={posterRef}

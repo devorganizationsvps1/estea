@@ -18,3 +18,5 @@ docs
 assets
 *.pdf
 .DS_Store
+# Görsel hattı çıktısı build'de yeniden üretilir (shared/media)
+**/public/_m

@@ -1,4 +1,4 @@
-import Image from 'next/image'
+import Image from '@/components/ui/Img'
 import { blends, compare } from '@/data/blends'
 
 /**

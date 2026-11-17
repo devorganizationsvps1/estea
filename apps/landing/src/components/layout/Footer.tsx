@@ -1,4 +1,4 @@
-import Image from 'next/image'
+import Image from '@/components/ui/Img'
 import { contact } from '@/data/content'
 import { corporateLinks, legalLinks, navLinks, shopLinks, shopProductsUrl, type NavLink } from '@/lib/site'
 import Btn from '@/components/ui/Btn'
@@ -64,37 +64,23 @@ export default function Footer() {
               </dd>
             </div>
 
-            <div>
-              <dt className={labelClass}>Fabrika</dt>
-              <dd className="mt-2 text-[1.05rem] leading-[1.55] text-cream/90">
-                <address className="not-italic">
-                  {contact.address.map((line) => (
-                    <span key={line} className="block">
-                      {line}
-                    </span>
-                  ))}
-                </address>
-                <a href={contact.mapHref} {...ext} className={`mt-2 inline-block text-[0.95rem] font-semibold text-cream ${linkClass}`}>
-                  Haritada aç
-                </a>
-              </dd>
-            </div>
-
-            <div>
-              <dt className={labelClass}>İstanbul</dt>
-              <dd className="mt-2 text-[1.05rem] leading-[1.55] text-cream/90">
-                <address className="not-italic">
-                  {contact.istanbul.address.map((line) => (
-                    <span key={line} className="block">
-                      {line}
-                    </span>
-                  ))}
-                </address>
-                <a href={contact.istanbul.mapHref} {...ext} className={`mt-2 inline-block text-[0.95rem] font-semibold text-cream ${linkClass}`}>
-                  Haritada aç
-                </a>
-              </dd>
-            </div>
+            {contact.locations.map((loc) => (
+              <div key={loc.label}>
+                <dt className={labelClass}>{loc.label}</dt>
+                <dd className="mt-2 text-[1.05rem] leading-[1.55] text-cream/90">
+                  <address className="not-italic">
+                    {loc.address.map((line) => (
+                      <span key={line} className="block">
+                        {line}
+                      </span>
+                    ))}
+                  </address>
+                  <a href={loc.mapHref} {...ext} className={`mt-2 inline-block text-[0.95rem] font-semibold text-cream ${linkClass}`}>
+                    Haritada aç
+                  </a>
+                </dd>
+              </div>
+            ))}
 
             <div>
               <dt className={labelClass}>Şirket</dt>

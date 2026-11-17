@@ -1,4 +1,4 @@
-import Image from 'next/image'
+import Image from '@/components/ui/Img'
 import { faq } from '@/data/content'
 import { shopUrl } from '@/lib/site'
 import Btn from '@/components/ui/Btn'

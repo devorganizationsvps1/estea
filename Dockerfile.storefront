@@ -55,7 +55,10 @@ RUN printf 'commit=%s\ncache_bust=%s\nbuilt=%s\nrevision=%s@%s\n' \
     "$GIT_COMMIT" "$CACHE_BUST" "$BUILD_TIMESTAMP" "$GIT_COMMIT" "$BUILD_TIMESTAMP" \
     > .build-meta && \
     echo "frontend build ${GIT_COMMIT}@${BUILD_TIMESTAMP} (cache_bust=${CACHE_BUST})"
-RUN npm run build
+# Görsel hattı (prebuild → public/_m): sıkıştırılmış görseller build'ler arasında
+# saklanır, yalnız değişen fotoğraf yeniden işlenir.
+RUN --mount=type=cache,target=/media-cache,id=escay-media-storefront \
+    MEDIA_CACHE_DIR=/media-cache npm run build
 
 FROM node:20-bookworm-slim AS runner
 WORKDIR /app

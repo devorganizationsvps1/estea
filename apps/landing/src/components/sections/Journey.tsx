@@ -1,4 +1,4 @@
-import Image from 'next/image'
+import Image from '@/components/ui/Img'
 import { journey } from '@/data/content'
 import PhotoSet from '@/components/ui/PhotoSet'
 import { doodles } from '@/components/ui/Doodles'

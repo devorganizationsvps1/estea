@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
-import Image from 'next/image'
+import Image from '@/components/ui/Img'
 
 const SWIPE_PX = 40
 

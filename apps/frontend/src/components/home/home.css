@@ -14,7 +14,8 @@
 /* —— Hero slider: tam genişlik fotoğraf, solda metin, yanlarda oklar, altta noktalar —— */
 .hero-slider {
   position: relative;
-  height: clamp(30rem, 76vh, 48rem);
+  /* Bannerlar 16:9 çizildi; alan da 16:9 olunca fotoğraf kırpılmadan tam görünür. */
+  aspect-ratio: 16 / 9;
   overflow: hidden;
   background: var(--color-ink);
   color: var(--color-white);
@@ -43,6 +44,10 @@
 }
 
 .hero-slider__img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
 }
 
@@ -120,6 +125,55 @@
 
 
 
+
+/* Slayta göre metin yeri: görseldeki boş alana oturur (yalnız masaüstü). */
+@media (min-width: 721px) {
+  [data-place="top"] .hero-slider__scrim {
+    background: linear-gradient(180deg, rgb(15 17 19 / 0.72) 0%, rgb(15 17 19 / 0.4) 26%, rgb(15 17 19 / 0) 44%);
+  }
+
+  [data-place="top"] .hero-slider__copy {
+    top: clamp(1.25rem, 3.5%, 2.5rem);
+    transform: none;
+    text-align: center;
+  }
+
+  [data-place="top"] .hero-slider__title {
+    max-width: none;
+  }
+
+  [data-place="top"] .hero-slider__lead {
+    max-width: none;
+    margin: 0.5rem auto 0;
+  }
+
+  [data-place="top"] .hero-slider__cta {
+    margin-top: 1rem;
+  }
+
+  [data-place="top-right"] .hero-slider__scrim {
+    background: linear-gradient(200deg, rgb(15 17 19 / 0.66) 0%, rgb(15 17 19 / 0.4) 30%, rgb(15 17 19 / 0) 55%);
+  }
+
+  [data-place="top-right"] .hero-slider__copy {
+    top: clamp(1.75rem, 6%, 3.5rem);
+    transform: none;
+    padding-left: 54%;
+  }
+
+  [data-place="top-right"] .hero-slider__lead {
+    max-width: 40ch;
+  }
+
+  /* Kapı önündeki koli: metin dar tutulur ki koliye binmesin. */
+  [data-place="left"] .hero-slider__title {
+    max-width: 13ch;
+  }
+
+  [data-place="left"] .hero-slider__lead {
+    max-width: 34ch;
+  }
+}
 
 .hero-slider__dots {
   position: absolute;
@@ -361,8 +415,9 @@ a.home-services__item:hover strong {
 
 
 @media (max-width: 720px) {
+  /* Mobil bannerlar 2:3; alan da 2:3 olunca görsel kırpılmadan tam görünür. */
   .hero-slider {
-    height: min(38rem, 84svh);
+    aspect-ratio: 2 / 3;
   }
 
   .hero-slider__scrim {
@@ -374,6 +429,31 @@ a.home-services__item:hover strong {
     bottom: 4.25rem;
     padding-inline: var(--page-gutter);
     transform: none;
+  }
+
+  .hero-slider__title {
+    font-size: 1.75rem;
+  }
+
+  .hero-slider__lead {
+    margin-top: 0.5rem;
+    font-size: 0.9375rem;
+    line-height: 1.5;
+  }
+
+  .hero-slider__cta {
+    min-height: 2.75rem;
+    margin-top: 1rem;
+  }
+
+  /* Görselin üst bandı boşsa metin oraya çıkar. */
+  [data-mobile-place="top"] .hero-slider__scrim {
+    background: linear-gradient(180deg, rgb(15 17 19 / 0.72) 0%, rgb(15 17 19 / 0.4) 30%, rgb(15 17 19 / 0) 50%);
+  }
+
+  [data-mobile-place="top"] .hero-slider__copy {
+    top: 1rem;
+    bottom: auto;
   }
 
 

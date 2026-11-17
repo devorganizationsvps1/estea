@@ -1,4 +1,4 @@
-import Image from "next/image"
+import Image from "@/components/Img"
 import Link from "next/link"
 import { socialIcon } from "@/components/brand/SocialIcons"
 import { COMPANY } from "@/lib/company"

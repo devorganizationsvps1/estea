@@ -1,5 +1,6 @@
 import { getImageProps } from "next/image"
 import { SITE_HOST } from "@/lib/site"
+import { mediaImage } from "@/lib/media"
 
 /**
  * Ürün/kategori görselleri Medusa'dan mutlak adresle gelir ve ham <img> ile
@@ -41,6 +42,10 @@ export function optimizedImg(src: string | null | undefined, sizes: string): Opt
   if (!src) return {}
   const target = optimizable(src)
   if (!target) return { src }
+  // public/ görseli build'de üretildiyse optimizer'a hiç gitme. Tek <img>'de
+  // biçim seçilemez; WebP her tarayıcıda açılır.
+  const local = target.startsWith("/") ? mediaImage(target) : null
+  if (local) return { src: local.src, srcSet: local.webp, sizes }
   const { props } = getImageProps({ src: target, alt: "", fill: true, sizes })
   return { src: props.src, srcSet: props.srcSet, sizes: props.sizes }
 }

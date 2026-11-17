@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import Image from 'next/image'
+import Image from '@/components/ui/Img'
 import ArtPhoto from '@/components/ui/ArtPhoto'
 import Btn from '@/components/ui/Btn'
 import { blogPage, posts, type Post } from '@/data/posts'
@@ -80,6 +80,8 @@ export default function BlogIndex() {
                 <ArtPhoto
                   photo={{ src: lead.image, mobile: lead.imageMobile }}
                   alt={lead.alt}
+                  // Tam genişlik 21:9 kare; varsayılan 50vw masaüstünde yarım çözünürlük seçtirir.
+                  sizes="(max-width: 1440px) 100vw, 1440px"
                   className="transition-transform duration-700 group-hover:scale-[1.03] motion-reduce:transition-none"
                 />
               </span>

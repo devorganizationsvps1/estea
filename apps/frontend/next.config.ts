@@ -30,7 +30,10 @@ const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
   images: {
-    formats: ["image/avif", "image/webp"],
+    // Yalnız uzak ürün görselleri (Medusa/S3) buradan geçer; yerel görseller build'de
+    // AVIF/WebP üretilir (shared/media). AVIF'i istek anında sıkıştırmak ilk açılışta
+    // görsel başına ~2 sn sürüyordu; WebP birkaç kat hızlı kodlanır.
+    formats: ["image/webp"],
     minimumCacheTTL: 60 * 60 * 24 * 7,
     // src/lib/image.ts yalnız bu host'ları optimizer'a yollar; ikisi birlikte değişmeli.
     remotePatterns: [
@@ -47,7 +50,19 @@ const nextConfig: NextConfig = {
     externalDir: true,
   },
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }]
+    return [
+      { source: "/:path*", headers: securityHeaders },
+      // Adı sabit public dosyaları: Next varsayılanı max-age=0 (her açılışta sorulur).
+      {
+        source: "/:path*\\.:ext(jpg|jpeg|png|webp|avif|svg|mp4|webm|woff2)",
+        headers: [{ key: "Cache-Control", value: "public, max-age=3600, stale-while-revalidate=86400" }],
+      },
+      // Görsel hattı çıktısı: adında içerik hash'i var, asla değişmez.
+      {
+        source: "/_m/:file*",
+        headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
+      },
+    ]
   },
   // Önceki İngilizce yollar → Türkçe (mail/PayTR/Omnisend linkleri, eski deploy'lar).
   async redirects() {

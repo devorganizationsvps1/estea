@@ -810,18 +810,11 @@
     width: min(18rem, calc(100vw - 1.5rem));
   }
 
-  .site-header__nav .site-header__inner {
-    height: 2.75rem;
-    padding-inline: 0;
-  }
-
-  .site-header__cats {
-    padding-inline: var(--page-gutter);
-    gap: 1.25rem;
-  }
-
-  .site-header__cat {
-    font-size: 0.9rem;
+  /* Kategoriler dar ekrana sığmıyor; burada menü düğmesindeki panelde durur. */
+  .site-header__nav,
+  .is-compact .site-header__nav,
+  .is-compact.is-nav-revealed .site-header__nav {
+    display: none;
   }
 }
 

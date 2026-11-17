@@ -1,4 +1,4 @@
-import Image from "next/image"
+import Image from "@/components/Img"
 import { Btn } from "@/components/brand/Btn"
 import { COMPANY } from "@/lib/company"
 

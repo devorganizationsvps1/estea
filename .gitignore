@@ -49,3 +49,6 @@ esçay-web-site-foto/
 
 # Tasarım denetimi (tasteskill) ekran görüntüleri ve raporları
 .taste-skill/
+# Görsel hattı çıktısı (shared/media/build-media.mjs; manifest src/generated/media.json repoda)
+apps/landing/public/_m/
+apps/frontend/public/_m/

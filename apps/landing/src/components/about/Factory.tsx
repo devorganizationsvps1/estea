@@ -8,6 +8,7 @@ import { contact } from '@/data/content'
  */
 export default function Factory() {
   const [lead, ...rest] = factory.photos
+  const [factorySite] = contact.locations
   return (
     <section id="fabrika" aria-labelledby="fabrika-baslik" className="relative z-10 bg-paper py-24 text-ink sm:py-32">
       <div className="mx-auto grid max-w-7xl gap-10 px-5 sm:px-8 lg:grid-cols-12 lg:items-center lg:gap-8">
@@ -19,13 +20,13 @@ export default function Factory() {
           <p className="mt-5 max-w-[46ch] text-[1.125rem] leading-[1.65] text-ink/75">{factory.body}</p>
           <address className="mt-8 text-[1.125rem] leading-[1.6] not-italic">
             <span className="block font-semibold">{contact.company}</span>
-            {contact.address.map((line) => (
+            {factorySite.address.map((line) => (
               <span key={line} className="block text-ink/75">
                 {line}
               </span>
             ))}
             <a
-              href={contact.mapHref}
+              href={factorySite.mapHref}
               target="_blank"
               rel="noopener noreferrer"
               className="mt-3 inline-block text-[1rem] font-semibold text-ink underline decoration-ink/30 decoration-[1.5px] underline-offset-[6px] transition-colors hover:decoration-brand focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
@@ -45,7 +46,7 @@ export default function Factory() {
             {rest.map((p) => (
               <figure key={p.src}>
                 <div className="relative aspect-[40/39] overflow-hidden rounded-2xl bg-linen sm:aspect-[4/3]">
-                  <ArtPhoto photo={p} sizes="(max-width: 1023px) 50vw, 25vw" />
+                  <ArtPhoto photo={p} sizes="(max-width: 1023px) 50vw, 25vw" mobileSizes="50vw" />
                 </div>
                 <figcaption className="mt-2 text-[1rem] text-ink/60">{p.caption}</figcaption>
               </figure>

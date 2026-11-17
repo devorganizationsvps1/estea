@@ -1,4 +1,4 @@
-import Image from 'next/image'
+import Image from '@/components/ui/Img'
 import Btn from '@/components/ui/Btn'
 import { blogPage, type Post } from '@/data/posts'
 import { shelf, teaBySlug } from '@/data/shelf'

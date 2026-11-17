@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import Image from 'next/image'
+import Image from '@/components/ui/Img'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { about } from '@/data/content'
@@ -36,27 +36,24 @@ export default function Manifesto() {
 
   const step = (dir: 1 | -1) => setSlide((s) => (s + dir + about.photos.length) % about.photos.length)
 
-  /* The four frames cross-fade while the section is on screen; with reduced motion the first frame stays.
-     Depends on `slide` so a manual step restarts the countdown instead of jumping right after a click. */
+  const [visible, setVisible] = useState(false)
+
+  /* The four frames cross-fade while the section is on screen; with reduced motion the first frame stays. */
   useEffect(() => {
     if (reduced) return
     const section = ref.current
     if (!section) return
-    let timer: ReturnType<typeof setInterval> | undefined
-    const io = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting) {
-        timer ??= setInterval(() => setSlide((s) => (s + 1) % about.photos.length), SLIDE_MS)
-      } else if (timer) {
-        clearInterval(timer)
-        timer = undefined
-      }
-    })
+    const io = new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting))
     io.observe(section)
-    return () => {
-      io.disconnect()
-      if (timer) clearInterval(timer)
-    }
-  }, [reduced, slide])
+    return () => io.disconnect()
+  }, [reduced])
+
+  /* Keyed on `slide`, so a manual step restarts the countdown instead of jumping right after a click. */
+  useEffect(() => {
+    if (reduced || !visible) return
+    const t = setTimeout(() => setSlide((s) => (s + 1) % about.photos.length), SLIDE_MS)
+    return () => clearTimeout(t)
+  }, [reduced, visible, slide])
 
   useEffect(() => {
     if (reduced) return

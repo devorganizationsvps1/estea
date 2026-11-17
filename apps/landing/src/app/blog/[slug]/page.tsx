@@ -55,7 +55,7 @@ export default async function PostPage({ params }: Params) {
                 </p>
               </div>
               <div data-reveal style={{ '--reveal-delay': '160ms' } as React.CSSProperties} className={`relative overflow-hidden rounded-2xl bg-paper sm:aspect-[16/10] lg:col-span-8 lg:col-start-5 ${post.imageMobile ? 'aspect-[40/39]' : 'aspect-[16/10]'}`}>
-                <ArtPhoto photo={{ src: post.image, mobile: post.imageMobile, alt: post.alt }} priority />
+                <ArtPhoto photo={{ src: post.image, mobile: post.imageMobile, alt: post.alt }} sizes="(max-width: 1023px) 100vw, 66vw" priority />
               </div>
             </header>
             <div className="mt-14 grid gap-x-8 gap-y-12 lg:mt-20 lg:grid-cols-12">

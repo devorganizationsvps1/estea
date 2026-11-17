@@ -1,11 +1,15 @@
 "use client"
 
-import Image from "next/image"
+import { getImageProps } from "next/image"
 import Link from "next/link"
 import { useCallback, useEffect, useRef, useState } from "react"
+import { mediaImage, pictureSources, preloadSources } from "@/lib/media"
 
 export type HeroSlide = {
+  /** Masaüstü bannerı, 16:9 (2560×1440). */
   image: string
+  /** Telefon bannerı, 2:3 (1440×2160); 720px ve altında bu gösterilir. */
+  mobileImage?: string
   alt: string
   /** Fotoğrafın kadrajı (object-position); dar ekranda özne ortada kalsın. */
   focus?: string
@@ -15,6 +19,13 @@ export type HeroSlide = {
   cta: { label: string; href: string; info?: boolean }
   /** Slayt sekmesindeki kısa ad. */
   tab: string
+  /**
+   * Masaüstünde metnin görseldeki boş alana oturduğu yer (mobilde hep altta).
+   * left: solda ortada · top: üstte ortada · top-right: sağ üstte.
+   */
+  place?: "left" | "top" | "top-right"
+  /** Telefonda metnin yeri: mobil görselin boş kalan üst ya da alt bandı. */
+  mobilePlace?: "top" | "bottom"
 }
 
 const INTERVAL_MS = 6500
@@ -110,21 +121,15 @@ export function HeroSlider({ slides }: { slides: HeroSlide[] }) {
               key={s.image}
               className="hero-slider__slide"
               data-active={active ? "" : undefined}
+              data-place={s.place ?? "left"}
+              data-mobile-place={s.mobilePlace ?? "bottom"}
               role="group"
               aria-roledescription="slide"
               aria-label={`${i + 1} / ${count}: ${s.tab}`}
               aria-hidden={!active}
             >
               {showImage ? (
-                <Image
-                  src={s.image}
-                  alt={s.alt}
-                  fill
-                  priority={i === 0}
-                  sizes="100vw"
-                  className="hero-slider__img"
-                  style={{ objectPosition: s.focus || "50% 50%" }}
-                />
+                <SlideImage slide={s} priority={i === 0} />
               ) : null}
               <div className="hero-slider__scrim" aria-hidden />
               <div className="hero-slider__copy">
@@ -164,5 +169,56 @@ export function HeroSlider({ slides }: { slides: HeroSlide[] }) {
         </>
       ) : null}
     </section>
+  )
+}
+
+const MOBILE_MQ = "(max-width: 720px)"
+const DESKTOP_MQ = "(min-width: 721px)"
+
+/** Telefonda dikey, masaüstünde yatay banner: tarayıcı yalnız ekrana uyanı indirir. */
+function SlideImage({ slide, priority }: { slide: HeroSlide; priority: boolean }) {
+  const style = { objectPosition: slide.mobileImage ? undefined : slide.focus || "50% 50%" }
+  const desktop = mediaImage(slide.image)
+  const mobile = slide.mobileImage ? mediaImage(slide.mobileImage) : null
+
+  // Build'de üretilmiş AVIF/WebP (shared/media): sunucu istek anında sıkıştırmaz.
+  if (desktop && (mobile || !slide.mobileImage)) {
+    const sources = [
+      ...(mobile ? pictureSources(mobile, "100vw", MOBILE_MQ) : []),
+      ...pictureSources(desktop, "100vw", mobile ? DESKTOP_MQ : undefined),
+    ]
+    if (priority) preloadSources(sources)
+    return (
+      <picture>
+        {sources.map((s) => (
+          <source key={`${s.media ?? ""}${s.type}`} type={s.type} media={s.media} srcSet={s.srcSet} sizes={s.sizes} />
+        ))}
+        <img
+          alt={slide.alt}
+          src={desktop.src}
+          width={desktop.width}
+          height={desktop.height}
+          decoding="async"
+          loading={priority ? "eager" : "lazy"}
+          fetchPriority={priority ? "high" : "auto"}
+          className="hero-slider__img"
+          style={{ ...style, backgroundColor: (mobile ?? desktop).color ?? undefined }}
+        />
+      </picture>
+    )
+  }
+
+  // Manifestte olmayan banner (yeni eklenmiş, build edilmemiş): Next optimizer'ı.
+  const common = { alt: slide.alt, sizes: "100vw", quality: 85, priority }
+  const { props: desktopProps } = getImageProps({ ...common, src: slide.image, width: 2560, height: 1440 })
+  const mobileProps = slide.mobileImage
+    ? getImageProps({ ...common, src: slide.mobileImage, width: 1440, height: 2160 }).props
+    : null
+  return (
+    <picture>
+      {mobileProps ? <source media={MOBILE_MQ} srcSet={mobileProps.srcSet} sizes={mobileProps.sizes} /> : null}
+      {/* eslint-disable-next-line jsx-a11y/alt-text -- alt getImageProps'tan gelir */}
+      <img {...desktopProps} className="hero-slider__img" style={style} />
+    </picture>
   )
 }

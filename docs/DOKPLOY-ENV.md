@@ -25,16 +25,30 @@ Build Path `/`, Docker Context `.` hepsinde.
 |---|---|
 | backend | `apps/backend/**`, `shared/**`, `Dockerfile.backend` |
 | frontend | `apps/frontend/**`, `shared/**`, `Dockerfile.storefront` |
-| landing | `apps/landing/**`, `packages/ui/**`, `Dockerfile.landing`, `package.json`, `package-lock.json` |
+| landing | `apps/landing/**`, `packages/ui/**`, `shared/media/**`, `Dockerfile.landing`, `package.json`, `package-lock.json` |
+
+### Görsel hattı (landing + mağaza)
+
+Yerel görseller (`public/` altı) build'de `shared/media/build-media.mjs` ile 9 genişlikte AVIF + WebP'ye çevrilir → `public/_m/<hash>-<w>.<ext>`, manifest `src/generated/media.json` (repoda). Sunucu istek anında sıkıştırmaz; `/_m/*` bir yıl `immutable`. Videolar da hash'li kopyalanır.
+
+- İlk build sıkıştırma yüzünden ~2 dk uzun sürer; sonrakiler BuildKit cache mount'tan gelir (değişen fotoğraf kadar). Dokploy builder'ı temizlenirse bir kez daha uzun sürer.
+- Yeni fotoğraf: `public/`'e koy, `npm run media` (dev/build bunu kendisi çalıştırır), değişen `media.json`'ı commit'le. Bileşenlerde `@/components/ui/Img` (landing) / `@/components/Img` (mağaza) kullan, `next/image` değil.
+- Mağazadaki ürün görselleri (Medusa/S3) hâlâ Next optimizer'ından geçer (yalnız WebP). Önbelleği deploy'lar arasında korumak için frontend'e **Volume** ekle: Advanced → Volumes → tür *Volume*, ad `escay-shop-image-cache`, mount path `/app/.next/cache/images` (yalnız görseller; tüm `.next/cache` eski sürümün veri önbelleğini de taşırdı). Yoksa her deploy sonrası her ürün görseli ilk açılışta yeniden sıkıştırılır.
+- Önüne CDN (ör. Cloudflare) konursa `/_m/*` olduğu gibi önbelleklenebilir: biçimi `<picture type>` seçtiği için `Vary: Accept` gerekmez.
 
 ## backend — Dönem A
 
 ```
 DATABASE_URL=postgres://<user>:<pass>@postgres:5432/<db>
+# İç ağ Postgres'te TLS yok → tanımsız bırak. Dış/yönetilen DB'de: DATABASE_SSL=true
+# (sertifika doğrulanır; özel CA için DATABASE_SSL_CA=<PEM>)
+# DATABASE_SSL=true
 REDIS_URL=redis://redis:6379
 MEDUSA_WORKER_MODE=shared
 JWT_SECRET=<openssl rand -base64 32>
 COOKIE_SECRET=<openssl rand -base64 32, farklı>
+# İkisi de en az 32 karakter ve birbirinden farklı olmalı; aksi halde backend açılmaz
+# (medusa-config.ts → assertStrongSecrets).
 # HTTP döneminde zorunlu; TLS gelince SİL
 COOKIE_SECURE=false
 

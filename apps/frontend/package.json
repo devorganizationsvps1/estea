@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "media": "node scripts/build-media.mjs",
+    "predev": "npm run media",
     "dev": "next dev -p 3025",
+    "prebuild": "npm run media",
     "build": "next build",
     "start": "next start -p 3025",
     "lint": "eslint",

@@ -1,4 +1,4 @@
-import Image from 'next/image'
+import Image from '@/components/ui/Img'
 import { blog } from '@/data/content'
 import Btn from '@/components/ui/Btn'
 

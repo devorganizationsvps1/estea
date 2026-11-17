@@ -3,7 +3,10 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
+    "media": "node ../../shared/media/build-media.mjs .",
+    "predev": "npm run media",
     "dev": "next dev -p 3020",
+    "prebuild": "npm run media",
     "build": "next build",
     "start": "next start -p ${PORT:-3020}",
     "typecheck": "tsc --noEmit"
@@ -11,7 +14,7 @@
   "dependencies": {
     "@estea/ui": "*",
     "gsap": "^3.15.0",
-    "next": "^16.4.2",
+    "next": "^16.4.6",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
