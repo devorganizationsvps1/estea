@@ -265,7 +265,9 @@ export function OrderReturnRequest({
                   options === null ? (
                     <span className={styles.returnMax}>Seçenekler yükleniyor…</span>
                   ) : !opt || !opt.choices.length ? (
-                    <span className={styles.returnMax}>Bu ürün için başka gramaj/çeşit yok.</span>
+                    <span className={styles.returnMax}>
+                      Değişime uygun gramaj/çeşit yok. Değişim aynı ya da daha düşük fiyatlı seçenekle yapılır.
+                    </span>
                   ) : (
                     <select
                       aria-label="Yeni gramaj / çeşit"

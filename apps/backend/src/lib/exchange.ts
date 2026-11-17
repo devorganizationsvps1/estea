@@ -67,6 +67,12 @@ const PRODUCT_VARIANT_FIELDS = [
   "variants.allow_backorder",
   "variants.options.value",
   "variants.options.option.title",
+  // Mağaza değişiminde fiyat tavanı (exchangeChoices capToCurrentPrice)
+  "variants.prices.amount",
+  "variants.prices.currency_code",
+  "variants.prices.price_list_id",
+  "variants.prices.min_quantity",
+  "variants.prices.rules_count",
   "variants.inventory_items.required_quantity",
   "variants.inventory_items.inventory.location_levels.location_id",
   "variants.inventory_items.inventory.location_levels.available_quantity",
@@ -108,7 +114,8 @@ export type ExchangeOptionsItem = {
 
 /**
  * Sipariş kalemleri için seçilebilecek diğer varyantlar (aynı ürün, stok
- * bilgisiyle). `includeCurrent` (yalnız admin): aynı varyantın aynısı da seçilebilir.
+ * bilgisiyle). `includeCurrent` (yalnız admin): aynı varyantın aynısı da seçilebilir ve
+ * fiyat tavanı yoktur; mağazada liste fiyatı mevcut varyantı aşan varyant listelenmez.
  */
 export async function loadExchangeOptions(
   container: MedusaContainer,
@@ -137,7 +144,11 @@ export async function loadExchangeOptions(
     item_id: i.id,
     title: i.product_title || i.title || "Ürün",
     variant: i.variant_title && !/^default/i.test(i.variant_title) ? i.variant_title : null,
-    choices: exchangeChoices(byProduct.get(i.product_id as string) || [], i.variant_id, locationId, opts),
+    // Admin (includeCurrent) serbest; mağaza yalnız eşit/ucuz varyant seçer.
+    choices: exchangeChoices(byProduct.get(i.product_id as string) || [], i.variant_id, locationId, {
+      includeCurrent: opts.includeCurrent,
+      capToCurrentPrice: !opts.includeCurrent,
+    }),
   }))
 }
 

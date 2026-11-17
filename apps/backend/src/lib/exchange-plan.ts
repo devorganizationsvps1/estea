@@ -115,6 +115,15 @@ type VariantLike = {
   manage_inventory?: boolean | null
   allow_backorder?: boolean | null
   options?: { value?: string | null; option?: { title?: string | null } | null }[] | null
+  prices?:
+    | {
+        amount?: unknown
+        currency_code?: string | null
+        price_list_id?: string | null
+        min_quantity?: unknown
+        rules_count?: unknown
+      }[]
+    | null
   inventory_items?:
     | {
         required_quantity?: unknown
@@ -179,11 +188,35 @@ export function variantAvailable(v: VariantLike, locationId?: string | null): nu
  * admin): mevcut varyant da "… (aynısı)" olarak en başta — defolu / hasarlı
  * ürünün yerine aynısı gönderilir.
  */
+/**
+ * Varyantın TRY liste fiyatı: fiyat listesi (indirim), kural ya da adet eşiği olmayan
+ * taban fiyat. Bulunamazsa null.
+ */
+export function variantListPrice(v: Pick<VariantLike, "prices">, currency = "try"): number | null {
+  let best: number | null = null
+  for (const p of v.prices || []) {
+    if ((p.currency_code || "").toLowerCase() !== currency) continue
+    if (p.price_list_id) continue
+    if (Number(p.rules_count || 0) > 0) continue
+    if (p.min_quantity != null && Number(p.min_quantity) > 1) continue
+    const n = Number(p.amount)
+    if (!Number.isFinite(n)) continue
+    best = best === null ? n : Math.min(best, n)
+  }
+  return best
+}
+
+/**
+ * `capToCurrentPrice` (mağaza akışı): değişim fiyat farkı tahsil etmez (yeni kalem 0 ₺
+ * eklenir), bu yüzden müşteri yalnız liste fiyatı mevcut varyantınkini AŞMAYAN
+ * varyantları seçebilir (50 g alıp 1 kg istemek olmaz). Fiyatı bilinmeyen varyant
+ * seçilemez. Admin akışı serbest.
+ */
 export function exchangeChoices(
   variants: VariantLike[],
   currentVariantId: string | null | undefined,
   locationId?: string | null,
-  opts: { includeCurrent?: boolean } = {}
+  opts: { includeCurrent?: boolean; capToCurrentPrice?: boolean } = {}
 ): VariantChoice[] {
   const choice = (v: VariantLike): VariantChoice => ({
     variant_id: v.id,
@@ -192,7 +225,17 @@ export function exchangeChoices(
     available: variantAvailable(v, locationId),
   })
   const current = opts.includeCurrent ? variants.find((v) => v.id && v.id === currentVariantId) : undefined
-  const others = variants.filter((v) => v.id && v.id !== currentVariantId).map(choice)
+  const currentPrice = opts.capToCurrentPrice
+    ? variantListPrice(variants.find((v) => v.id === currentVariantId) || {})
+    : null
+  const withinPrice = (v: VariantLike): boolean => {
+    if (!opts.capToCurrentPrice) return true
+    const price = variantListPrice(v)
+    return currentPrice !== null && price !== null && price <= currentPrice + 1e-9
+  }
+  const others = variants
+    .filter((v) => v.id && v.id !== currentVariantId && withinPrice(v))
+    .map(choice)
   if (!current) return others
   const same = choice(current)
   return [{ ...same, title: same.title ? `${same.title} (aynısı)` : "Aynısı", same: true }, ...others]

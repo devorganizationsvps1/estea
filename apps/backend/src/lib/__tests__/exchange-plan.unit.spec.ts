@@ -6,6 +6,7 @@ import {
   readExchange,
   validateExchangeChoices,
   variantAvailable,
+  variantListPrice,
 } from "../exchange-plan"
 
 const ex = {
@@ -119,6 +120,59 @@ describe("variant choices", () => {
         stocked
       )
     ).toThrow(/yalnız 2 adet/)
+  })
+})
+
+describe("mağaza değişiminde fiyat tavanı", () => {
+  const price = (amount: number, extra: Record<string, unknown> = {}) => ({
+    amount,
+    currency_code: "try",
+    price_list_id: null,
+    min_quantity: null,
+    rules_count: 0,
+    ...extra,
+  })
+  const stock = [{ required_quantity: 1, inventory: { location_levels: [{ location_id: "loc", available_quantity: 9 }] } }]
+  const variants = [
+    { id: "v50", title: "50 g", prices: [price(80)], inventory_items: stock },
+    { id: "v50b", title: "50 g Poşet", prices: [price(80)], inventory_items: stock },
+    { id: "v25", title: "25 g", prices: [price(45)], inventory_items: stock },
+    { id: "v1kg", title: "1 kg", prices: [price(360)], inventory_items: stock },
+    { id: "vnone", title: "Fiyatsız", prices: [], inventory_items: stock },
+  ]
+
+  it("liste fiyatı: indirim listesi, kural ve adet eşiği sayılmaz", () => {
+    expect(
+      variantListPrice({
+        prices: [
+          price(300),
+          price(100, { price_list_id: "plist_1" }),
+          price(90, { rules_count: 1 }),
+          price(80, { min_quantity: 10 }),
+          price(50, { currency_code: "eur" }),
+        ],
+      } as never)
+    ).toBe(300)
+    expect(variantListPrice({ prices: [] } as never)).toBeNull()
+  })
+
+  it("mağaza: yalnız eşit/ucuz varyant; pahalı ve fiyatsız elenir", () => {
+    const ids = exchangeChoices(variants as never, "v50", "loc", { capToCurrentPrice: true }).map((c) => c.variant_id)
+    expect(ids).toEqual(["v50b", "v25"])
+  })
+
+  it("mevcut varyantın fiyatı bilinmiyorsa seçenek yok", () => {
+    expect(exchangeChoices(variants as never, "vnone", "loc", { capToCurrentPrice: true })).toEqual([])
+  })
+
+  it("pahalı varyant seçimi doğrulamada reddedilir", () => {
+    const choices = new Map([["li_1", exchangeChoices(variants as never, "v50", "loc", { capToCurrentPrice: true })]])
+    expect(() => validateExchangeChoices([{ key: "li_1", quantity: 1, variant_id: "v1kg" }], choices)).toThrow(/geçerli değil/)
+  })
+
+  it("admin akışı (tavansız) tüm varyantları görür", () => {
+    const ids = exchangeChoices(variants as never, "v50", "loc", { includeCurrent: true }).map((c) => c.variant_id)
+    expect(ids).toEqual(["v50", "v50b", "v25", "v1kg", "vnone"])
   })
 })
 
