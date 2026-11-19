@@ -38,21 +38,21 @@ export default function Journey() {
 
         {/* The six steps at a glance in the site's own idiom: a brand-coloured disc with a line doodle, the verb and its sentence. The discs run the leaf's colours in order. */}
         <nav aria-label="Üretim adımları" className="mt-14 lg:mt-20">
-          <ol className="grid grid-cols-2 gap-x-6 gap-y-10 sm:grid-cols-3 lg:grid-cols-6 lg:gap-x-8">
+          <ol className="grid grid-cols-3 gap-x-4 gap-y-8 sm:gap-x-6 sm:gap-y-10 lg:grid-cols-6 lg:gap-x-8">
             {journey.stops.map((stop, i) => {
               const Icon = doodles[stop.icon]
               return (
                 <li key={stop.verb}>
-                  <a href={`#yolculuk-${i}`} className="group flex flex-col items-start gap-4">
+                  <a href={`#yolculuk-${i}`} className="group flex flex-col items-center gap-3 text-center sm:items-start sm:gap-4 sm:text-left">
                     <span
                       className={`flex h-16 w-16 items-center justify-center rounded-full transition-transform duration-300 group-hover:-rotate-6 ${discs[i]}`}
                     >
                       <Icon className="h-10 w-10" />
                     </span>
-                    <span className="headline block text-[1.5rem] leading-none text-ink">
+                    <span className="headline block text-[1.2rem] leading-none text-ink sm:text-[1.5rem]">
                       {stop.verb}
                     </span>
-                    <span className="-mt-1 block max-w-[24ch] text-[0.95rem] leading-[1.45] text-ink/70">{stop.body}</span>
+                    <span className="-mt-1 hidden max-w-[24ch] text-[0.95rem] leading-[1.45] text-ink/70 sm:block">{stop.body}</span>
                   </a>
                 </li>
               )
@@ -61,11 +61,11 @@ export default function Journey() {
         </nav>
 
         {/* Each spread sits between two hairlines so every step has a clear start and end. */}
-        <ol className="mt-20 border-t border-line lg:mt-28">
+        <ol className="mt-14 border-t border-line sm:mt-20 lg:mt-28">
           {journey.stops.map((stop, i) => {
             const photoLeft = i % 2 === 0
             return (
-              <li key={stop.verb} data-reveal className="grid gap-8 border-b border-line py-14 last:border-b-0 last:pb-0 lg:grid-cols-12 lg:items-center lg:gap-8 lg:py-20">
+              <li key={stop.verb} data-reveal className="grid gap-8 border-b border-line py-12 last:border-b-0 sm:py-14 last:pb-0 lg:grid-cols-12 lg:items-center lg:gap-8 lg:py-20">
                 {/* All of the step's photographs at once; any one opens the set large, arrows in the step colour. */}
                 <PhotoSet
                   images={stop.images}

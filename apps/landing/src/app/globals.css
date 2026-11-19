@@ -80,9 +80,19 @@
   cursor: pointer !important;
 }
 
-/* Hero shade behind the copy: a left-to-right curtain that is fully clear before the
-   packs start (~39% of the width), so the products keep their own colour. On phones the
-   packs fill the frame, so there is no curtain there and the text shadow carries the copy. */
+/* Hero shade behind the copy. From 40rem up it is a left-to-right curtain that is fully
+   clear before the packs start (~39% of the width), so the products keep their own colour.
+   On phones the packs fill the frame right behind the words, so the shade runs top to
+   bottom and is deepest over the copy; it fades out with the copy on the first scroll. */
+.hero-curtain {
+  background: linear-gradient(
+    180deg,
+    rgb(22 12 5 / 0.28) 0,
+    rgb(22 12 5 / 0.62) 32%,
+    rgb(22 12 5 / 0.66) 72%,
+    rgb(22 12 5 / 0.34) 100%
+  );
+}
 @media (min-width: 40rem) {
   .hero-curtain {
     background: linear-gradient(

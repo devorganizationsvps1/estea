@@ -6,7 +6,7 @@ import Btn from '@/components/ui/Btn'
 /**
  * FAQ on the linen ground: the seal sits right above the centred title, as
  * on the pack, then the questions run side by side in a three-column grid.
- * Each one is numbered and opens in place; native details/summary, so it
+ * Each one is numbered (from the sm breakpoint up; on phones the plus leads the row) and opens in place; native details/summary, so it
  * works without JavaScript. The round plus fills brand red while open.
  */
 export default function Faq() {
@@ -27,11 +27,11 @@ export default function Faq() {
           <p className="mx-auto mt-4 max-w-[60ch] text-[1.1rem] leading-[1.5] text-ink/75 sm:text-[1.2rem]">{faq.lead}</p>
         </header>
 
-        <dl className="mt-14 grid items-start gap-x-10 gap-y-10 sm:mt-16 sm:grid-cols-2 lg:grid-cols-3 lg:gap-x-12 lg:gap-y-12">
+        <dl className="mt-12 grid items-start gap-x-10 gap-y-5 sm:mt-16 sm:gap-y-10 sm:grid-cols-2 lg:grid-cols-3 lg:gap-x-12 lg:gap-y-12">
           {faq.items.map((item, i) => (
             <details key={item.q} className="group border-t border-ink/15">
-              <summary className="grid cursor-pointer list-none grid-cols-[1fr_auto] gap-x-4 pt-6 text-left [&::-webkit-details-marker]:hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-4 focus-visible:ring-offset-linen">
-                <span aria-hidden="true" className="label text-brand">
+              <summary className="grid cursor-pointer list-none grid-cols-[auto_1fr] items-center sm:grid-cols-[1fr_auto] gap-x-4 pt-5 text-left sm:items-start sm:pt-6 [&::-webkit-details-marker]:hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-4 focus-visible:ring-offset-linen">
+                <span aria-hidden="true" className="label hidden text-brand sm:block">
                   {String(i + 1).padStart(2, '0')}
                 </span>
                 {/* Outlined disc with a plus; fills brand red and turns into a minus when the answer is open. */}
@@ -39,11 +39,11 @@ export default function Faq() {
                   aria-hidden="true"
                   className="relative row-span-2 size-10 shrink-0 self-start rounded-full border border-ink/25 transition-colors duration-200 group-hover:border-brand group-open:border-brand group-open:bg-brand before:absolute before:top-1/2 before:left-1/2 before:h-0.5 before:w-4 before:-translate-x-1/2 before:-translate-y-1/2 before:bg-ink before:transition-colors group-open:before:bg-cream after:absolute after:top-1/2 after:left-1/2 after:h-4 after:w-0.5 after:-translate-x-1/2 after:-translate-y-1/2 after:bg-ink after:transition-[transform,background-color] group-open:after:scale-y-0 group-open:after:bg-cream"
                 />
-                <dt className="headline mt-3 text-[clamp(1.3rem,1.8vw,1.6rem)] leading-[1.1] transition-colors group-hover:text-brand group-open:text-brand">
+                <dt className="headline text-[clamp(1.3rem,1.8vw,1.6rem)] leading-[1.1] transition-colors group-hover:text-brand group-open:text-brand sm:mt-3">
                   {item.q}
                 </dt>
               </summary>
-              <dd className="mt-4 pr-14 text-[1.05rem] leading-[1.6] text-ink/75">{item.a}</dd>
+              <dd className="mt-3 pl-14 sm:mt-4 sm:pr-14 sm:pl-0 text-[1.05rem] leading-[1.6] text-ink/75">{item.a}</dd>
             </details>
           ))}
         </dl>

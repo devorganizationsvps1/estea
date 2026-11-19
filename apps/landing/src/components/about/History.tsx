@@ -39,12 +39,12 @@ export default function History() {
                   <div>
                     <h3 className="headline text-[clamp(1.5rem,2.2vw,2rem)] leading-[1.05]">{e.title}</h3>
                     <p className="mt-2 max-w-[46ch] text-[1.125rem] leading-[1.6] text-ink/75">{e.body}</p>
-                    {last ? (
-                      <div className="relative mt-5 aspect-[40/39] overflow-hidden rounded-2xl bg-paper sm:aspect-[16/10]">
-                        <ArtPhoto photo={history.todayImage} />
-                      </div>
-                    ) : null}
                   </div>
+                  {last ? (
+                    <div className="relative col-span-2 mt-6 aspect-[40/39] overflow-hidden rounded-2xl bg-paper sm:col-span-1 sm:col-start-2 sm:mt-5 sm:aspect-[16/10]">
+                      <ArtPhoto photo={history.todayImage} />
+                    </div>
+                  ) : null}
                 </li>
               )
             })}

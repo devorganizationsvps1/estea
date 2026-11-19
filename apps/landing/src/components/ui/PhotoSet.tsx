@@ -33,6 +33,8 @@ export default function PhotoSet({
   const [lead, ...rest] = images
   /* The small row always has room for three, so a set of two still reads as one big and one small. */
   const cols = Math.max(rest.length, 3)
+  /* On phones an empty third reads as a missing photo, so the row is as wide as the set. */
+  const colsNarrow = Math.max(rest.length, 2)
   const n = images.length
 
   const dialogRef = useRef<HTMLDialogElement>(null)
@@ -79,7 +81,10 @@ export default function PhotoSet({
       </button>
 
       {rest.length > 0 && (
-        <div className="grid gap-3 sm:gap-4" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+        <div
+          className="grid grid-cols-[repeat(var(--cols-narrow),minmax(0,1fr))] gap-3 sm:grid-cols-[repeat(var(--cols),minmax(0,1fr))] sm:gap-4"
+          style={{ '--cols': cols, '--cols-narrow': colsNarrow } as CSSProperties}
+        >
           {rest.map((photo, i) => (
             <button
               key={photo.src}

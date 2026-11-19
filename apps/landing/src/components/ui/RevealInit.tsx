@@ -17,7 +17,8 @@ export default function RevealInit() {
           }
         }
       },
-      { rootMargin: '0px 0px -10% 0px', threshold: 0.15 },
+      // Eşik oran değil piksel: telefonda 1000 px'lik bir blok %15'ini beklerse ekranın üçte biri boş kalır.
+      { rootMargin: '0px 0px -64px 0px', threshold: 0 },
     )
 
     nodes.forEach((node) => io.observe(node))

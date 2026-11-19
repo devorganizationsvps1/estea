@@ -32,6 +32,12 @@ const discs = ['bg-leaf text-ink', 'bg-gold text-ink', 'bg-brand text-cream', 'b
 
 export default function Navbar({ tone = 'cream' }: { tone?: Tone }) {
   const [open, setOpen] = useState(false)
+  /* Phones: the menu button stays on screen for the whole page. Over the home hero it is
+     the cream disc; once the hero has scrolled away it turns ink, as on the sub-pages. */
+  const [pastHero, setPastHero] = useState(false)
+  /* It steps aside while the page is being read downward and returns on the first scroll up,
+     so it never sits on top of a card's own controls. */
+  const [away, setAway] = useState(false)
   const pillClass = `${pillBase} ${pillTone[tone]}`
 
   useEffect(() => {
@@ -47,10 +53,29 @@ export default function Navbar({ tone = 'cream' }: { tone?: Tone }) {
     }
   }, [open])
 
+  useEffect(() => {
+    const hero = tone === 'cream' ? document.getElementById('hero') : null
+    let last = window.scrollY
+    const onScroll = () => {
+      const y = window.scrollY
+      if (hero) setPastHero(y > hero.offsetHeight - 64)
+      if (y < 120) setAway(false)
+      else if (y - last > 6) setAway(true)
+      else if (last - y > 6) setAway(false)
+      last = y
+    }
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [tone])
+
+  const burger = open || pastHero ? burgerTone.ink : burgerTone[tone]
+
   return (
+    <>
     <header
       id="main-nav"
-      className={`absolute inset-x-0 top-0 z-50 transition-colors duration-300 ${open ? 'bg-linen text-ink' : `bg-transparent ${tone === 'ink' ? 'text-ink' : 'text-cream'}`}`}
+      className={`absolute inset-x-0 top-0 z-50 bg-transparent ${tone === 'ink' ? 'text-ink' : 'text-cream'}`}
     >
       <div className="relative z-10 mx-auto flex h-20 max-w-[90rem] items-center justify-between px-5 sm:h-[5.5rem] sm:px-8 lg:px-10">
         <Link
@@ -103,31 +128,24 @@ export default function Navbar({ tone = 'cream' }: { tone?: Tone }) {
           </ul>
         </nav>
 
-        <button
-          type="button"
-          className={`inline-flex h-11 w-11 items-center justify-center rounded-full transition-colors md:hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${open ? burgerTone.ink : burgerTone[tone]}`}
-          aria-expanded={open}
-          aria-controls="mobil-menu"
-          aria-label={open ? 'Menüyü kapat' : 'Menüyü aç'}
-          onClick={() => setOpen((value) => !value)}
-        >
-          <span className="flex h-[14px] w-5 flex-col justify-between" aria-hidden="true">
-            <span className={`h-[2px] w-full rounded-full bg-current transition-transform ${open ? 'translate-y-[6px] rotate-45' : ''}`} />
-            <span className={`h-[2px] w-full rounded-full bg-current transition-opacity ${open ? 'opacity-0' : ''}`} />
-            <span className={`h-[2px] w-full rounded-full bg-current transition-transform ${open ? '-translate-y-[6px] -rotate-45' : ''}`} />
-          </span>
-        </button>
       </div>
+    </header>
 
       <nav
         id="mobil-menu"
-        className={`fixed inset-0 z-0 bg-linen pt-24 transition-opacity duration-200 md:hidden ${
-          open ? 'opacity-100' : 'pointer-events-none opacity-0'
+        className={`fixed inset-0 z-[55] overflow-y-auto bg-linen transition-opacity duration-200 md:hidden ${
+          open ? 'opacity-100' : 'pointer-events-none invisible opacity-0'
         }`}
         aria-label="Mobil menü"
         aria-hidden={!open}
       >
-        <ul className="flex h-full flex-col px-6 pb-10">
+        {/* The menu can open anywhere on the page, so it carries the logo itself. */}
+        <div className="flex h-20 items-center px-5">
+          <Link href="/" aria-label="Esçay ana sayfa" tabIndex={open ? 0 : -1} onClick={() => setOpen(false)} className="rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-gold">
+            <Image src="/logo.png" alt="Esçay" width={180} height={96} className="h-12 w-auto" />
+          </Link>
+        </div>
+        <ul className="flex min-h-[calc(100%-5rem)] flex-col px-6 pt-4 pb-10">
           {navLinks.map((link, i) => {
             const Icon = doodles[link.icon ?? 'sprig']
             return (
@@ -166,6 +184,21 @@ export default function Navbar({ tone = 'cream' }: { tone?: Tone }) {
           </li>
         </ul>
       </nav>
-    </header>
+
+        <button
+        type="button"
+        className={`fixed top-[18px] right-5 z-[60] inline-flex h-11 w-11 items-center justify-center rounded-full shadow-[0_4px_14px_rgba(0,0,0,0.22)] ring-1 ring-cream/25 transition-[background-color,color,transform,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] md:hidden focus:outline-none focus-visible:translate-y-0 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-offset-2 motion-reduce:transition-none ${away && !open ? '-translate-y-20 opacity-0' : ''} ${burger}`}
+        aria-expanded={open}
+        aria-controls="mobil-menu"
+        aria-label={open ? 'Menüyü kapat' : 'Menüyü aç'}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <span className="flex h-[14px] w-5 flex-col justify-between" aria-hidden="true">
+          <span className={`h-[2px] w-full rounded-full bg-current transition-transform ${open ? 'translate-y-[6px] rotate-45' : ''}`} />
+          <span className={`h-[2px] w-full rounded-full bg-current transition-opacity ${open ? 'opacity-0' : ''}`} />
+          <span className={`h-[2px] w-full rounded-full bg-current transition-transform ${open ? '-translate-y-[6px] -rotate-45' : ''}`} />
+        </span>
+      </button>
+    </>
   )
 }

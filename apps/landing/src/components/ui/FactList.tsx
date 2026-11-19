@@ -8,7 +8,7 @@ type Fact = { readonly term: string; readonly value: string }
 
 export default function FactList({ color, facts }: { color: string; facts: readonly Fact[] }) {
   return (
-    <dl className="mt-8 inline-grid overflow-hidden rounded-xl border-2 border-ink sm:grid-cols-2">
+    <dl className="mt-8 grid overflow-hidden sm:inline-grid rounded-xl border-2 border-ink sm:grid-cols-2">
       {facts.map((f, j) => (
         <div key={f.term} className={`px-5 py-4 ${j > 0 ? 'border-t-2 border-dashed border-ink/40 sm:border-t-0 sm:border-l-2' : ''}`}>
           <dt className="label" style={{ color }}>

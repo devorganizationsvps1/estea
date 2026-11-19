@@ -1,7 +1,7 @@
 'use client'
 
 import Image from '@/components/ui/Img'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useSyncExternalStore } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
@@ -10,6 +10,12 @@ import { shopUrl } from '@/lib/site'
 import { mediaFile } from '@/lib/media'
 
 gsap.registerPlugin(ScrollTrigger)
+
+const noSubscription = () => () => {}
+const isConstrainedConnection = () => {
+  const conn = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection
+  return Boolean(conn?.saveData) || /2g|3g/.test(conn?.effectiveType ?? '')
+}
 
 /** Only seek when the target moved by ~2 frames at 30fps. */
 const SEEK_EPSILON = 1 / 15
@@ -36,10 +42,15 @@ export default function Hero() {
   const posterRef = useRef<HTMLImageElement>(null)
   const textRef = useRef<HTMLDivElement>(null)
   const targetTimeRef = useRef(0)
-  const reducedMotion = usePrefersReducedMotion()
+  const prefersReduced = usePrefersReducedMotion()
+  /* Veri tasarrufu açıkken ya da 2G/3G'de 1,4 MB'lık video hiç istenmez; hero fotoğrafıyla
+     sabit kalır (azaltılmış hareket düzeni). `connection` yalnız Chromium'da var; yoksa video oynar. */
+  const lite = useSyncExternalStore(noSubscription, isConstrainedConnection, () => false)
+  const reducedMotion = prefersReduced || lite
 
   useEffect(() => {
-    if (reducedMotion) return
+    // Hydration'ın ilk geçişinde `lite` henüz false'tur; bağlantıya burada da bakılır ki video hiç istenmesin.
+    if (reducedMotion || isConstrainedConnection()) return
     const wrapper = wrapperRef.current
     const pin = pinRef.current
     const video = videoRef.current
@@ -264,9 +275,9 @@ export default function Hero() {
   // The next section starts sliding over the video for the last screen of that.
   return (
     <section ref={wrapperRef} id="hero" className="relative h-[240vh] bg-ink">
-      <div ref={pinRef} className="relative h-svh min-h-[640px] overflow-hidden">
+      <div ref={pinRef} className="relative h-lvh min-h-[640px] overflow-hidden">
         {media}
-        <div ref={textRef} className="absolute inset-0 z-10 flex items-center pt-20 sm:pt-[5.5rem]">
+        <div ref={textRef} className="absolute inset-x-0 top-0 z-10 flex h-svh min-h-[640px] items-center pt-20 sm:pt-[5.5rem]">
           {curtain}
           <div className="relative w-full">{copy}</div>
         </div>

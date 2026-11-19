@@ -12,8 +12,8 @@ import Btn from '@/components/ui/Btn'
 export default function Blog() {
   return (
     <section id="blog" aria-labelledby="blog-baslik" className="relative z-10 bg-linen py-24 text-ink sm:py-32">
-      <div className="mx-auto grid max-w-7xl gap-x-8 gap-y-10 px-5 sm:grid-cols-2 sm:px-8 lg:grid-cols-4 lg:gap-y-12 xl:gap-x-12">
-        <header className="border-t border-ink/15 pt-6 sm:col-span-2 lg:col-span-1 lg:row-span-2">
+      <div className="mx-auto grid max-w-7xl gap-x-8 gap-y-0 px-5 sm:grid-cols-2 sm:gap-y-10 sm:px-8 lg:grid-cols-4 lg:gap-y-12 xl:gap-x-12">
+        <header className="border-t border-ink/15 pt-6 pb-10 sm:col-span-2 sm:pb-0 lg:col-span-1 lg:row-span-2">
           <div className="lg:sticky lg:top-28">
             <Image
               src="/logo.png"
@@ -38,30 +38,30 @@ export default function Blog() {
           <article key={post.href} className="border-t border-ink/15">
             <a
               href={post.href}
-              className="group block pt-6 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-4 focus-visible:ring-offset-linen"
+              className="group grid grid-cols-[6.5rem_1fr] gap-x-4 py-4 sm:block sm:pt-6 sm:pb-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-4 focus-visible:ring-offset-linen"
             >
-              <div className="flex items-start justify-between gap-4">
+              <div className="col-start-2 row-start-1 self-end sm:flex sm:items-start sm:justify-between sm:gap-4">
                 <span className="label text-brand">{post.date}</span>
                 {/* Outlined disc with an arrow; fills brand red on hover, as the FAQ plus does when open. */}
                 <span
                   aria-hidden="true"
-                  className="flex size-10 shrink-0 items-center justify-center rounded-full border border-ink/25 text-ink transition-colors duration-200 group-hover:border-brand group-hover:bg-brand group-hover:text-cream"
+                  className="hidden size-10 shrink-0 items-center justify-center rounded-full border sm:flex border-ink/25 text-ink transition-colors duration-200 group-hover:border-brand group-hover:bg-brand group-hover:text-cream"
                 >
                   <svg viewBox="0 0 16 16" className="size-4 transition-transform duration-200 group-hover:-rotate-45" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M3 8h10M9 4l4 4-4 4" />
                   </svg>
                 </span>
               </div>
-              <div className="relative mt-4 aspect-[4/3] overflow-hidden rounded-2xl bg-paper">
+              <div className="relative col-start-1 row-span-2 row-start-1 aspect-square overflow-hidden rounded-xl bg-paper sm:mt-4 sm:aspect-[4/3] sm:rounded-2xl">
                 <Image
                   src={post.image}
                   alt=""
                   fill
-                  sizes="(min-width: 1024px) 22vw, (min-width: 640px) 50vw, 100vw"
+                  sizes="(min-width: 1024px) 22vw, (min-width: 640px) 50vw, 104px"
                   className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
                 />
               </div>
-              <h3 className="headline mt-5 text-[clamp(1.2rem,1.5vw,1.4rem)] leading-[1.1] text-ink transition-colors group-hover:text-brand">
+              <h3 className="headline col-start-2 row-start-2 mt-2 self-start text-[clamp(1.2rem,1.5vw,1.4rem)] leading-[1.1] sm:mt-5 text-ink transition-colors group-hover:text-brand">
                 {post.title}
               </h3>
             </a>

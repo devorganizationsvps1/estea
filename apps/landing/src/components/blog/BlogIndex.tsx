@@ -38,7 +38,7 @@ export default function BlogIndex() {
           }
         }
       },
-      { rootMargin: '0px 0px -10% 0px', threshold: 0.15 },
+      { rootMargin: '0px 0px -64px 0px', threshold: 0 },
     )
     nodes.forEach((node) => io.observe(node))
     return () => io.disconnect()
@@ -46,17 +46,17 @@ export default function BlogIndex() {
 
   return (
     <>
-      <section aria-labelledby="blog-baslik" className="relative z-10 bg-linen pt-36 pb-24 text-ink sm:pt-44 lg:pb-36">
+      <section aria-labelledby="blog-baslik" className="relative z-10 bg-linen pt-28 pb-20 text-ink sm:pt-44 sm:pb-24 lg:pb-36">
         <div className={frame}>
           <h1
             id="blog-baslik"
-            className="headline flex flex-col text-[19vw] leading-[0.92] tracking-[-0.035em] sm:flex-row sm:items-baseline sm:gap-[0.18em] sm:text-[clamp(4.5rem,10.5vw,10rem)]"
+            className="headline flex flex-wrap items-baseline gap-x-[0.22em] text-[14vw] leading-[0.92] tracking-[-0.035em] sm:flex-nowrap sm:gap-[0.18em] sm:text-[clamp(4.5rem,10.5vw,10rem)]"
           >
             <span>Çay</span>
-            {/* Cümlenin ortasındaki kelime: bahçe. Telefonda iki kelimenin arasında kendi satırında. */}
+            {/* Cümlenin ortasındaki kelime: bahçe. Telefonda başlık tek satır, şerit altında. */}
             <span
               aria-hidden="true"
-              className="shutter relative my-[0.12em] block aspect-[2/1] w-full overflow-hidden rounded-2xl bg-leaf-soft sm:my-0 sm:aspect-auto sm:h-[0.72em] sm:min-w-0 sm:flex-1"
+              className="shutter relative order-last mt-[0.35em] block aspect-[2/1] w-full overflow-hidden rounded-2xl bg-leaf-soft sm:order-none sm:mt-0 sm:aspect-auto sm:h-[0.72em] sm:w-auto sm:min-w-0 sm:flex-1"
             >
               <ArtPhoto
                 photo={{ src: '/yolculuk/yetistir-2.jpg', mobile: '/yolculuk/yetistir-2-k.jpg', focus: '50% 55%' }}
@@ -68,7 +68,7 @@ export default function BlogIndex() {
             <span>üzerine</span>
           </h1>
 
-          <p className="mt-10 max-w-[38ch] text-[1.35rem] leading-[1.45] sm:mt-14 sm:text-[1.6rem]">{blogPage.lead}</p>
+          <p className="mt-8 max-w-[38ch] text-[1.2rem] leading-[1.45] sm:mt-14 sm:text-[1.6rem]">{blogPage.lead}</p>
 
           {/* En yeni yazı: başlıktaki şeridin açılmış hâli. */}
           <article className="mt-16 sm:mt-24" data-reveal>

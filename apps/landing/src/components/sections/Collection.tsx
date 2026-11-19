@@ -76,8 +76,8 @@ export default function Collection() {
       }
     >
       {/* Photo stage: the gardens behind the packs; headline on top, packs on the table. */}
-      <div className="relative bg-ink text-cream lg:min-h-[56.25vw]">
-      <div className="absolute inset-0" aria-hidden="true">
+      <div className="relative bg-[#1c120a] text-cream sm:bg-ink lg:min-h-[56.25vw]">
+      <div className="absolute inset-0 hidden sm:block" aria-hidden="true">
         <Image
           src="/koleksiyon/sahne.jpg"
           alt=""
@@ -106,7 +106,14 @@ export default function Collection() {
         </ul>
       </div>
 
-      <div className="relative mx-auto w-full max-w-7xl px-5 pt-14 text-center [text-shadow:0_2px_16px_rgba(0,0,0,0.45)] sm:px-8 lg:static lg:pt-[4.5vw]">
+      <div className="relative mx-auto w-full max-w-7xl px-5 pt-14 text-center [text-shadow:0_2px_16px_rgba(0,0,0,0.45)] max-sm:isolate sm:px-8 lg:static lg:pt-[4.5vw]">
+        {/* Phones: the photo is hung from this block, whose foot is the packs' base, so the
+            stand's top (about 73% down the frame) always lands under the packs whatever the headline
+            wraps to. Below the stand the frame melts into the dark wood the caption sits on. */}
+        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 -top-7 -z-10 h-[calc((100%+1.75rem)/0.735)] sm:hidden">
+          <Image src="/koleksiyon/sahne.jpg" alt="" fill sizes="120vw" className="object-cover object-[52%_50%]" />
+          <div className="absolute inset-0 bg-[linear-gradient(to_bottom,rgb(17_17_17/0.45)_0,rgb(17_17_17/0.3)_45%,rgb(28_18_10/0.15)_70%,#1c120a_100%)]" />
+        </div>
         <div data-reveal>
           <h2
             key={current.slug}
@@ -159,7 +166,7 @@ export default function Collection() {
                     zIndex: 10 - Math.abs(off),
                   } as CSSProperties
                 }
-                className={`absolute top-1/2 left-1/2 aspect-square h-full [--gap:128px] transition-[transform,opacity] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none sm:[--gap:min(30vw,300px)] lg:[--gap:min(28vw,400px)] ${isActive ? 'cursor-pointer' : 'cursor-w-resize'} ${s.opacity === 0 ? 'pointer-events-none' : ''}`}
+                className={`absolute top-1/2 left-1/2 aspect-square h-full [--gap:128px] max-sm:origin-bottom transition-[transform,opacity] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none sm:[--gap:min(30vw,300px)] lg:[--gap:min(28vw,400px)] ${isActive ? 'cursor-pointer' : 'cursor-w-resize'} ${s.opacity === 0 ? 'pointer-events-none' : ''}`}
               >
                 <Image
                   src={p.image}

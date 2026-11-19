@@ -16,10 +16,10 @@ function LinkColumn({ title, links }: { title: string; links: NavLink[] }) {
   return (
     <nav aria-label={title}>
       <h2 className={labelClass}>{title}</h2>
-      <ul className="mt-4 flex flex-col gap-1">
+      <ul className="mt-3 flex flex-col sm:mt-4 sm:gap-1">
         {links.map((link) => (
           <li key={link.href}>
-            <a href={link.href} {...(link.external ? ext : {})} className={`inline-block py-1 text-[0.95rem] text-cream/80 ${linkClass}`}>
+            <a href={link.href} {...(link.external ? ext : {})} className={`inline-block py-2.5 text-[0.95rem] text-cream/80 sm:py-1 ${linkClass}`}>
               {link.label}
             </a>
           </li>
@@ -53,7 +53,7 @@ export default function Footer() {
             </div>
           </div>
 
-          <dl className="grid gap-x-10 gap-y-8 rounded-2xl border border-cream/15 p-8 sm:grid-cols-2 sm:p-10 lg:col-span-7">
+          <dl className="grid gap-x-10 gap-y-8 rounded-2xl border border-cream/15 p-6 sm:grid-cols-2 sm:p-10 lg:col-span-7">
             <div>
               <dt className={labelClass}>Telefon</dt>
               <dd className="mt-2">
@@ -75,7 +75,7 @@ export default function Footer() {
                       </span>
                     ))}
                   </address>
-                  <a href={loc.mapHref} {...ext} className={`mt-2 inline-block text-[0.95rem] font-semibold text-cream ${linkClass}`}>
+                  <a href={loc.mapHref} {...ext} className={`inline-block py-2.5 text-[0.95rem] font-semibold text-cream underline decoration-cream/40 sm:mt-2 sm:py-0 sm:no-underline ${linkClass}`}>
                     Haritada aç
                   </a>
                 </dd>
@@ -120,7 +120,7 @@ export default function Footer() {
               Karadeniz’in yüksek rakımlı bahçelerinden, katkısız harmanlanan çay.
             </p>
           </div>
-          <div className="grid gap-10 sm:grid-cols-3 lg:col-span-7 lg:col-start-6">
+          <div className="grid grid-cols-2 gap-x-6 gap-y-10 sm:grid-cols-3 sm:gap-10 lg:col-span-7 lg:col-start-6">
             <LinkColumn title="Keşfet" links={navLinks} />
             <LinkColumn title="Kurumsal" links={corporate} />
             <LinkColumn title="Mağaza" links={shopLinks} />
@@ -134,10 +134,10 @@ export default function Footer() {
           <p>
             © {year} {contact.company} Tüm hakları saklıdır.
           </p>
-          <ul className="flex flex-wrap gap-x-6 gap-y-2">
+          <ul className="flex flex-wrap gap-x-6 sm:gap-y-2">
             {legalLinks.map((link) => (
               <li key={link.href}>
-                <a href={link.href} {...ext} className={linkClass}>
+                <a href={link.href} {...ext} className={`inline-block py-2.5 sm:py-0 ${linkClass}`}>
                   {link.label}
                 </a>
               </li>
