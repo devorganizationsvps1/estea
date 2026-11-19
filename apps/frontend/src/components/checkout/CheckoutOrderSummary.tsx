@@ -2,6 +2,7 @@ import Link from "next/link"
 import {
   computeCartDisplayTotals,
   includedVatFromGross,
+  productDiscountFromTotals,
   productSubtotalFromCart,
   roundMoney,
 } from "@/lib/cart-pricing"
@@ -50,7 +51,7 @@ type CheckoutOrderSummaryProps = TotalsOptions & {
 }
 
 function preDiscountProductTotal(cart: CheckoutSummaryCart): number {
-  const discount = Math.max(0, Number(cart.discount_total) || 0)
+  const discount = productDiscountFromTotals(cart)
   const original = cart.original_item_total
   if (original != null && Number.isFinite(Number(original))) {
     return roundMoney(Number(original))
@@ -71,7 +72,8 @@ export function computeCheckoutTotals(
   cart: CheckoutSummaryCart,
   { useAppliedShipping = false, shippingEstimate = null }: TotalsOptions = {}
 ): CheckoutTotals {
-  const discount = Math.max(0, Number(cart.discount_total) || 0)
+  // Yalnız ürün indirimi: kargo indirimi (ücretsiz kargo) shipping_total'da zaten düşülü.
+  const discount = productDiscountFromTotals(cart)
   const productSubtotal = preDiscountProductTotal(cart)
 
   const display = computeCartDisplayTotals(productSubtotal, shippingEstimate)
@@ -83,22 +85,12 @@ export function computeCheckoutTotals(
     ? Number(cart.shipping_total)
     : display.shipping
 
-  let total: number
-  if (
-    cart.total != null &&
-    Number.isFinite(Number(cart.total)) &&
-    (appliedShipping || discount > 0)
-  ) {
-    const medusaTotal = Number(cart.total)
-    total = appliedShipping ? medusaTotal : roundMoney(medusaTotal + shipping)
-  } else if (appliedShipping) {
-    total = roundMoney(Math.max(0, productSubtotal - discount + shipping))
-  } else {
-    total =
-      discount > 0
-        ? roundMoney(Math.max(0, productSubtotal - discount + shipping))
-        : display.total
-  }
+  // Kargo uygulanmışsa Medusa toplamı esas. Uygulanmamışsa cart.total kullanılmaz:
+  // sepette önceki denemeden kalan kargo yöntemi olabilir, tahmin üstüne iki kez eklenir.
+  const total =
+    appliedShipping && cart.total != null && Number.isFinite(Number(cart.total))
+      ? Number(cart.total)
+      : roundMoney(Math.max(0, productSubtotal - discount) + shipping)
 
   const includedVat = includedVatFromGross(
     Math.max(0, productSubtotal - discount)

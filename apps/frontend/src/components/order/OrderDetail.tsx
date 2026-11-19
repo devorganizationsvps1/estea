@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { formatTry, PRODUCT_IMAGE } from "@/lib/medusa"
+import { productDiscountFromTotals } from "@/lib/cart-pricing"
 import { resolveOrderNumberLabel } from "@escay/shared/order-number"
 import {
   ORDER_STATUS_BADGE,
@@ -246,6 +247,9 @@ export function OrderDetail({
   const hasExchange = existingReturns.some(
     (r) => resolveReturnStatus(r)?.kind === "exchange"
   )
+  // Yalnız ürün indirimi; kargo indirimi (ücretsiz kargo) kargo satırında düşülü.
+  const productDiscount = productDiscountFromTotals(order)
+  const shippingTotal = Number(order.shipping_total) || 0
 
   return (
     <article className={styles.wrap} data-testid="order-detail">
@@ -326,20 +330,22 @@ export function OrderDetail({
                     <dd>
                       {formatTry(
                         order.original_item_total ??
-                          (Number(order.discount_total) > 0 &&
-                          order.item_total != null
-                            ? Number(order.item_total) +
-                              Number(order.discount_total)
+                          (productDiscount > 0 && order.item_total != null
+                            ? Number(order.item_total) + productDiscount
                             : (order.item_subtotal ?? order.item_total))
                       )}
                     </dd>
                   </div>
-                  {Number(order.discount_total) > 0 ? (
+                  {productDiscount > 0 ? (
                     <div className={styles.totalsRow}>
                       <dt>İndirim</dt>
-                      <dd>−{formatTry(order.discount_total)}</dd>
+                      <dd>−{formatTry(productDiscount)}</dd>
                     </div>
                   ) : null}
+                  <div className={styles.totalsRow}>
+                    <dt>Kargo</dt>
+                    <dd>{shippingTotal > 0 ? formatTry(shippingTotal) : "Ücretsiz"}</dd>
+                  </div>
                   <div
                     className={`${styles.totalsRow} ${styles.totalsRowStrong}`}
                   >

@@ -16,10 +16,13 @@ const order: ContractOrder = {
   email: "ayse@example.com",
   currency_code: "try",
   created_at: "2026-10-16T10:00:00Z",
+  // Medusa: item_total indirim SONRASI, original_item_total indirim öncesi.
   total: 2149.9,
-  item_total: 2199.9,
+  item_total: 2149.9,
+  original_item_total: 2199.9,
   shipping_total: 0,
-  discount_total: 50,
+  // Ücretsiz kargo indirimi (99,90) de discount_total'a girer; sözleşmede ürün indirimi düşülür.
+  discount_total: 149.9,
   metadata: { payment_method: "card" },
   shipping_address: {
     first_name: "Ayşe",
@@ -32,8 +35,8 @@ const order: ContractOrder = {
   },
   billing_address: null,
   items: [
-    { product_title: "Karadeniz Siyah Çay", variant_title: "500 g", variant_sku: "ESC-1001", quantity: 1, unit_price: 1299.9, total: 1299.9 },
-    { product_title: "Bergamot Çay", variant_title: "Default", quantity: 2, unit_price: 450, total: 900 },
+    { product_title: "Karadeniz Siyah Çay", variant_title: "500 g", variant_sku: "ESC-1001", quantity: 1, unit_price: 1299.9, original_total: 1299.9, total: 1270.36 },
+    { product_title: "Bergamot Çay", variant_title: "Default", quantity: 2, unit_price: 450, original_total: 900, total: 879.54 },
   ],
 }
 
@@ -64,6 +67,10 @@ describe("order-contracts", () => {
     ])
     expect(d.totals.map((t) => t.label)).toEqual(["Ara Toplam", "İndirim", "Kargo", "Toplam (KDV dahil)"])
     expect(d.totals.find((t) => t.label === "Kargo")?.value).toBe("Ücretsiz")
+    // Ara toplam − indirim + kargo = toplam (indirim iki kez düşülmez, kargo indirimi sayılmaz)
+    expect(d.totals.find((t) => t.label === "Ara Toplam")?.value).toContain("2.199,90")
+    expect(d.totals.find((t) => t.label === "İndirim")?.value).toContain("50,00")
+    expect(d.totals.find((t) => t.label === "Toplam (KDV dahil)")?.value).toContain("2.149,90")
   })
 
   it("checkout adresi: mahalle + ilçe / il", () => {

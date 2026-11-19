@@ -1,6 +1,10 @@
 import Link from "next/link"
 import type { ReactNode } from "react"
-import { includedVatFromGross, roundMoney } from "@/lib/cart-pricing"
+import {
+  includedVatFromGross,
+  productDiscountFromTotals,
+  roundMoney,
+} from "@/lib/cart-pricing"
 import { formatTry } from "@/lib/medusa"
 import { resolveOrderNumberLabel } from "@escay/shared/order-number"
 import {
@@ -28,7 +32,7 @@ function formatOrderDate(value?: string | Date | null) {
 }
 
 function productSubtotal(order: OrderDetailView): number {
-  const discount = Math.max(0, Number(order.discount_total) || 0)
+  const discount = productDiscountFromTotals(order)
   if (
     order.original_item_total != null &&
     Number.isFinite(Number(order.original_item_total))
@@ -72,7 +76,8 @@ export function CheckoutConfirmationView({
   const dateLabel = formatOrderDate(order.created_at)
 
   const subtotal = productSubtotal(order)
-  const discount = Math.max(0, Number(order.discount_total) || 0)
+  // Yalnız ürün indirimi; kargo indirimi shipping_total'da zaten düşülü.
+  const discount = productDiscountFromTotals(order)
   const shipping = Number(order.shipping_total) || 0
   const total = Number(order.total) || 0
   const includedVat = includedVatFromGross(Math.max(0, subtotal - discount))

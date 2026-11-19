@@ -10,6 +10,7 @@ import { buildOrderConfirmationEmail } from "../emails/order-confirmation"
 import { coerceAmount } from "../emails/format"
 import type { BankTransferInfo } from "./bank-transfer"
 import { createNotificationIdempotent } from "./notify"
+import { productDiscountTotal, productSubtotalBeforeDiscount } from "./order-discount"
 
 /**
  * Send "Siparişiniz Alındı" after payment capture (not on order.placed).
@@ -64,12 +65,11 @@ export async function sendOrderConfirmationEmail(
     item_subtotal?: number | string | null
     metadata?: Record<string, unknown> | null
   }
-  const discountForDisplay = Number(coerceAmount(orderAny.discount_total) ?? 0)
-  const itemTotalForDisplay =
-    orderAny.original_item_total ??
-    (discountForDisplay > 0 && order.item_total != null
-      ? Number(coerceAmount(order.item_total) ?? 0) + discountForDisplay
-      : (orderAny.item_subtotal ?? order.item_total))
+  // discount_total kargo indirimini de içerir; mailde yalnız ürün indirimi gösterilir,
+  // kargo satırı zaten indirimli tutarı (ücretsizse 0) gösterir.
+  const orderTotals = { ...orderAny, item_total: order.item_total }
+  const discountForDisplay = productDiscountTotal(orderTotals)
+  const itemTotalForDisplay = productSubtotalBeforeDiscount(orderTotals)
 
   const { subject, html, text } = buildOrderConfirmationEmail({
     displayId,
@@ -98,7 +98,7 @@ export async function sendOrderConfirmationEmail(
       }
     }),
     itemTotal: coerceAmount(itemTotalForDisplay),
-    discountTotal: coerceAmount(orderAny.discount_total),
+    discountTotal: discountForDisplay,
     shippingTotal: coerceAmount(order.shipping_total),
     taxTotal: coerceAmount(order.tax_total),
     total: coerceAmount(order.total),

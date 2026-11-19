@@ -15,6 +15,29 @@ export function roundMoney(amount: number): number {
   return Math.round(amount * 100) / 100
 }
 
+type DiscountTotalsLike = {
+  original_item_total?: number | null
+  item_total?: number | null
+  discount_total?: number | null
+}
+
+const finite = (v: unknown): number | null =>
+  v != null && v !== "" && Number.isFinite(Number(v)) ? Number(v) : null
+
+/**
+ * Ürün indirimi (KDV dahil). Medusa `discount_total` kargo indirimini de içerir
+ * ("Ücretsiz kargo" promosyonu); onu ürün indirimi diye düşmek kargoyu iki kez
+ * sayar. `item_total` indirim sonrası, `original_item_total` indirim öncesidir.
+ */
+export function productDiscountFromTotals(t: DiscountTotalsLike): number {
+  const original = finite(t.original_item_total)
+  const items = finite(t.item_total)
+  if (original != null && items != null) {
+    return Math.max(0, roundMoney(original - items))
+  }
+  return Math.max(0, finite(t.discount_total) ?? 0)
+}
+
 /** VAT portion inside a tax-inclusive gross amount. */
 export function includedVatFromGross(gross: number): number {
   if (!gross || gross <= 0) return 0

@@ -24,6 +24,7 @@ import type { MedusaContainer } from "@medusajs/framework/types"
 import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils"
 import { getOrderDetailWorkflow } from "@medusajs/medusa/core-flows"
 import { formatOrderNumber } from "@escay/shared/order-number"
+import { productDiscountTotal, productSubtotalBeforeDiscount } from "./order-discount"
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from "pdf-lib"
 
 import {
@@ -107,6 +108,7 @@ export type ContractOrder = {
   created_at?: string | Date | null
   total?: unknown
   item_total?: unknown
+  original_item_total?: unknown
   shipping_total?: unknown
   discount_total?: unknown
   tax_total?: unknown
@@ -121,6 +123,7 @@ export type ContractOrder = {
     quantity?: unknown
     unit_price?: unknown
     total?: unknown
+    original_total?: unknown
   }[] | null
 }
 
@@ -152,7 +155,9 @@ export function contractDataFromOrder(o: ContractOrder, legalAcceptedAt: Date | 
   const money = (v: unknown) => formatMoneyExact(Number(coerceAmount(v) ?? 0), currency)
   const ship = o.shipping_address ?? null
   const bill = o.billing_address ?? ship
-  const discount = Number(coerceAmount(o.discount_total) ?? 0)
+  // Satırlar ve ara toplam indirim öncesi; indirim tek satırda düşülür (yalnız ürün indirimi —
+  // kargo indirimi "Kargo" satırında zaten 0 görünür).
+  const discount = productDiscountTotal(o)
   const placedAt = o.created_at ? new Date(o.created_at) : new Date()
 
   const recipient = {
@@ -173,11 +178,11 @@ export function contractDataFromOrder(o: ContractOrder, legalAcceptedAt: Date | 
     const name = [i.product_title || i.title, i.variant_title && i.variant_title !== "Default" ? i.variant_title : null]
       .filter(Boolean)
       .join(" - ")
-    const line = i.total != null ? i.total : Number(coerceAmount(i.unit_price) ?? 0) * qty
+    const line = i.original_total != null ? i.original_total : Number(coerceAmount(i.unit_price) ?? 0) * qty
     return { name: i.variant_sku ? `${name} (${i.variant_sku})` : name, quantity: qty, total: money(line) }
   })
 
-  const totals = [{ label: "Ara Toplam", value: money(o.item_total) }]
+  const totals = [{ label: "Ara Toplam", value: money(productSubtotalBeforeDiscount(o)) }]
   if (discount > 0) totals.push({ label: "İndirim", value: `-${money(discount)}` })
   totals.push({ label: "Kargo", value: Number(coerceAmount(o.shipping_total) ?? 0) > 0 ? money(o.shipping_total) : "Ücretsiz" })
   totals.push({ label: "Toplam (KDV dahil)", value: money(o.total) })

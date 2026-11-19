@@ -133,11 +133,21 @@ export async function cancelUnshippedOrder(
     )
   }
 
+  // İptal olayının subscriber'ları (ör. kupon kullanımı geri alma) metadata'ya yazmış
+  // olabilir; iptal öncesi okunan kopya onları silmesin.
+  const { data: fresh } = await query.graph({
+    entity: "order",
+    fields: ["id", "metadata"],
+    filters: { id: order.id },
+  })
+  const currentMetadata =
+    (fresh?.[0] as { metadata?: Record<string, unknown> | null } | undefined)?.metadata ?? order.metadata
+
   await scope.resolve(Modules.ORDER).updateOrders([
     {
       id: order.id,
       metadata: {
-        ...(order.metadata || {}),
+        ...(currentMetadata || {}),
         escay_cancel: {
           at: new Date().toISOString(),
           reason,

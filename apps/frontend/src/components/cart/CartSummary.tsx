@@ -9,9 +9,8 @@ import { AnimatedAmount } from "./AnimatedAmount"
 type CartSummaryProps = {
   /** Pre-discount product subtotal (tax-inclusive TRY). */
   subtotal: number
+  /** Ürün indirimi (KDV dahil); kargo indirimi dahil değil. */
   discountTotal?: number | null
-  /** Medusa cart total after discount (items only, no shipping) when available. */
-  cartTotal?: number | null
   /**
    * Backend'den gelen kargo ücreti. null → henüz hesaplanamadı (ör. adres
    * yok): "Ödeme adımında hesaplanır" yazılır, toplam kargo hariç gösterilir.
@@ -22,22 +21,19 @@ type CartSummaryProps = {
 export function CartSummary({
   subtotal,
   discountTotal = 0,
-  cartTotal = null,
   shipping: shippingEstimate = null,
 }: CartSummaryProps) {
   const discount = Math.max(0, Number(discountTotal) || 0)
   const shippingPending = shippingEstimate == null
-  const { shipping: displayShipping, total: displayTotal } =
-    computeCartDisplayTotals(subtotal, shippingEstimate)
+  const { shipping: displayShipping } = computeCartDisplayTotals(
+    subtotal,
+    shippingEstimate
+  )
   const shipping = shippingPending ? 0 : displayShipping
-  const fullTotal = shippingPending ? roundMoney(subtotal) : displayTotal
-  const itemsAfterDiscount =
-    cartTotal != null && Number.isFinite(Number(cartTotal)) && discount > 0
-      ? Number(cartTotal)
-      : roundMoney(Math.max(0, subtotal - discount))
-  const total =
-    discount > 0 ? roundMoney(itemsAfterDiscount + shipping) : fullTotal
-  const vatNote = includedVatFromGross(Math.max(0, subtotal - discount))
+  // Satırlardan hesaplanır: cart.total önceki denemeden kalan kargoyu içerebilir.
+  const itemsAfterDiscount = roundMoney(Math.max(0, subtotal - discount))
+  const total = roundMoney(itemsAfterDiscount + shipping)
+  const vatNote = includedVatFromGross(itemsAfterDiscount)
 
   return (
     <dl className="cart-totals">

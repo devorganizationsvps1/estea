@@ -4,6 +4,7 @@ import {
   VAT_RATE,
   computeCartDisplayTotals,
   includedVatFromGross,
+  productDiscountFromTotals,
   productSubtotalFromCart,
   roundMoney,
 } from "../cart-pricing"
@@ -167,5 +168,24 @@ describe("env ile yapılandırma", () => {
     vi.stubEnv("NEXT_PUBLIC_VAT_RATE", "yüzde-bir")
     const m = await import("../cart-pricing")
     expect(Number.isNaN(m.includedVatFromGross(100))).toBe(true)
+  })
+})
+
+describe("productDiscountFromTotals", () => {
+  it("ürün indirimini original_item_total − item_total olarak alır, kargo indirimini saymaz", () => {
+    // 200 TL ürün, %10 kupon + ücretsiz kargo (99,90): discount_total 119,90
+    expect(
+      productDiscountFromTotals({ original_item_total: 200, item_total: 180, discount_total: 119.9 })
+    ).toBe(20)
+    // Yalnız ücretsiz kargo: ürün indirimi yok
+    expect(
+      productDiscountFromTotals({ original_item_total: 200, item_total: 200, discount_total: 99.9 })
+    ).toBe(0)
+  })
+
+  it("alanlar yoksa discount_total'a döner, eksiye düşmez", () => {
+    expect(productDiscountFromTotals({ discount_total: 15 })).toBe(15)
+    expect(productDiscountFromTotals({})).toBe(0)
+    expect(productDiscountFromTotals({ original_item_total: 100, item_total: 120 })).toBe(0)
   })
 })

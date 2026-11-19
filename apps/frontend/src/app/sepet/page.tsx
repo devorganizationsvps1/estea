@@ -1,5 +1,8 @@
 import { getCart } from "@/lib/cart"
-import { productSubtotalFromCart } from "@/lib/cart-pricing"
+import {
+  productDiscountFromTotals,
+  productSubtotalFromCart,
+} from "@/lib/cart-pricing"
 import { EnsureCart } from "@/components/EnsureCart"
 import { CartActions } from "@/components/cart/CartActions"
 import { CartEmpty } from "@/components/cart/CartEmpty"
@@ -39,8 +42,13 @@ export default async function CartPage() {
   }
 
   const itemCount = items.reduce((sum, item) => sum + (item.quantity || 0), 0)
-  const discountTotal = Number(
-    (cart as { discount_total?: number | null })?.discount_total ?? 0
+  // Yalnız ürün indirimi; ücretsiz kargo indirimi kargo satırını etkiler.
+  const discountTotal = productDiscountFromTotals(
+    cart as {
+      original_item_total?: number | null
+      item_total?: number | null
+      discount_total?: number | null
+    }
   )
   const originalItemTotal = (
     cart as { original_item_total?: number | null }
@@ -86,7 +94,6 @@ export default async function CartPage() {
               <CartSummary
                 subtotal={productSubtotal}
                 discountTotal={discountTotal}
-                cartTotal={cart!.total}
                 shipping={shippingEstimate}
               />
               <CartActions />
