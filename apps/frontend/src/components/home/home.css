@@ -469,17 +469,22 @@ a.home-services__item:hover strong {
     scrollbar-width: none;
   }
 
+  .home-cats::-webkit-scrollbar,
   .home-strip::-webkit-scrollbar {
     display: none;
   }
 
+  /* min-width: 0 şart: yoksa WebKit (iOS Safari/Chrome) flex öğesini kare görsel
+     kutusunun min-content genişliğine şişirir; kartlar ~640 px olur ve snap oturmaz. */
   .home-cats > li {
     flex: 0 0 40%;
+    min-width: 0;
     scroll-snap-align: start;
   }
 
   .home-strip > li {
     flex: 0 0 70%;
+    min-width: 0;
     scroll-snap-align: start;
   }
 
