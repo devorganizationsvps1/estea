@@ -10,6 +10,7 @@ import {
 import { errorText } from "./ops-events"
 import { resolveLocking } from "../modules/paytr/order-guards"
 import { isReturnRejected } from "./return-rejection"
+import { returnLockKey } from "./return-lock"
 
 /**
  * Ürün bazlı iade kabulü (admin, paket geldiğinde).
@@ -101,7 +102,7 @@ export async function acceptReturnItems(
   // Süreçler arası kilit (Redis): ikinci tıklama birincinin bitmesini bekler, sonra iade
   // artık "requested" olmadığı için run() içinde reddedilir.
   return resolveLocking(container).execute(
-    `escay:return-accept:${input.return_id}`,
+    returnLockKey(input.return_id),
     () => run(container, input),
     { timeout: 60, ttl: 180 }
   )

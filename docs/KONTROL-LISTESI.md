@@ -36,6 +36,7 @@ Es Çay doğrudan DHL (K1), Geliver maddeleri DHL karşılığıyla değerlendir
 | Medusa 2.18 açıkları (21 yüksek) | Medusa 2.22.4 (6 Kasım, 2.23.0 çok yeni), zod 4.6.6, backend imajı Node 22; audit: 0 kritik, 0 yüksek, 11 orta. Bağlantı tablosu değişikliği için tek seferlik `MEDUSA_LINKS=all` (DOKPLOY-ENV.md) | `apps/backend/package.json`, `Dockerfile.backend`, `docker/entrypoint.sh` |
 | Kargo KDV oranı env'den | Siparişin kargo vergi satırından; yoksa env | `shippingVatRateOf` |
 | Şahıs şirketi kurumsal fatura seçemiyordu | Kurumsal faturada 11 haneli TCKN de kabul (kontrol basamaklı), BizimHesap'a vergi no olarak gider | `shared/checkout-address.ts`, `bizimhesap/customer.ts` |
+| İade kodu yenilenemiyordu; talepte firma hatası olursa kod hiç alınamıyordu | Admin "Kodu yenile" / "Kargo firmasından kod al": firmadaki iade kaydı iptal edilip aynı referansla yeniden açılır, kod müşteriye yeniden gider. DHL sandbox'ta doğrulandı (2026-11-20) | `lib/return-code-renew.ts`, `POST /admin/returns/:id/return-code/renew`, DHL `cancelReturn` |
 | Storefront / landing HEALTHCHECK, landing revision ucu | Dockerfile HEALTHCHECK; landing `/api/build-info` | `Dockerfile.storefront`, `Dockerfile.landing` |
 
 ## Açık kalanlar
@@ -46,7 +47,6 @@ Es Çay doğrudan DHL (K1), Geliver maddeleri DHL karşılığıyla değerlendir
 | İade kuruş yuvarlaması | ✅ (kabul) | 3 ayrı kısmi iadede en çok 0,01 TL eksik iade; fazla iade yok |
 | Taksitte vade farkı | 🔧 | Vade farkı iade edilmez (karar); PayTR'nin iadeyi hangi tutar üzerinden kabul ettiği canlıda görülmeli |
 | Sipariş numarasında boşluk / fatura numarası | 🔧 | BizimHesap teyidi (K14) |
-| İade kodu yenileme | ⏳ | Sabit iade referansı DHL'de yeni kod açtırmıyor. Eski iade siparişinin `cancelorder` ile iptali sandbox'ta denenmedi; denenmeden yazılmayacak |
 | E-fatura mükellefi tespiti, faturada gönderim tarihi, boş TCKN | 🔧 | BizimHesap teyidi (K14): e-fatura / e-arşiv ayrımını BizimHesap mı yapıyor, gönderim tarihi alanı var mı |
 | Gmail SMTP limiti, SPF/DKIM/DMARC | 🔧 | İşlemsel mail servisi + alan adı kayıtları (K12) |
 | CookieYes ID boş | 🔧 | Banner çıkmadan hiçbir takip çalışmaz (K7) |

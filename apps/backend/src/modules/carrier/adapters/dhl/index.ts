@@ -525,6 +525,39 @@ export function createDhlAdapter(deps: DhlAdapterDeps = {}): CarrierAdapter {
       }
     },
 
+    // Sandbox'ta doğrulandı (2026-11-20): iade siparişi cancelorder ile iptal olur; aynı
+    // referansla createReturnOrder yeniden açılır ve yeni etiket linki verir. İptal edilmiş /
+    // olmayan kayıt 404 / 20305 döner → zaten iptal sayılır.
+    // Önce durum: müşteri paketi şubeye verdiyse kayıt barkodlanmıştır (gönderi no var) →
+    // iptal edilmez, yoldaki iade kaydını silmeyelim. Durum okunamazsa da iptal yok (kapalı kal).
+    async cancelReturn(originalData, returnCode) {
+      const { o, client } = connect()
+      guardWrite(o, Boolean(originalData.test_mode))
+      let shipmentId = ""
+      try {
+        shipmentId = parseShipmentStatus(await client.getShipmentStatus(returnCode)).shipmentId.trim()
+      } catch (error) {
+        if (!isNotFoundDhlError(error)) {
+          throw new CarrierError(`DHL iade durumu okunamadı, iptal edilmedi: ${(error as Error).message}`, {
+            code: "DHL_RETURN_STATUS_UNKNOWN",
+          })
+        }
+      }
+      if (shipmentId) {
+        throw new CarrierError(
+          `Müşteri paketi DHL'ye vermiş (gönderi no ${shipmentId}); iade kaydı iptal edilmez. Paket yolda, kod yenilemeye gerek yok.`,
+          { code: "DHL_RETURN_IN_TRANSIT" }
+        )
+      }
+      try {
+        await client.cancelOrder(returnCode)
+        logger.info(`[dhl] İade siparişi iptal edildi: ${returnCode}`)
+      } catch (error) {
+        if (isNotFoundDhlError(error)) return
+        throw error
+      }
+    },
+
     trackingUrl,
 
     async healthCheck(): Promise<CarrierHealth> {

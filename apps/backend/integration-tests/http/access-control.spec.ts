@@ -50,6 +50,8 @@ const ADMIN_ROUTES: [method: "get" | "post", path: string][] = [
   ["post", "/admin/returns/ret_x/refund"],
   ["post", "/admin/returns/ret_x/reject"],
   ["post", "/admin/returns/ret_x/return-code"],
+  ["get", "/admin/returns/ret_x/return-code/renew"],
+  ["post", "/admin/returns/ret_x/return-code/renew"],
 ]
 
 const CUSTOMER_ROUTES: [method: "get" | "post" | "delete", path: string][] = [

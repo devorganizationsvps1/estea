@@ -12,6 +12,8 @@ import { loadReturnEmailContext } from "../lib/return-email-context"
 import { createNotificationIdempotent } from "../lib/notify"
 import { getConfiguredCarrier } from "../modules/carrier/registry"
 import { isReturnRejected } from "../lib/return-rejection"
+import { returnLockKey } from "../lib/return-lock"
+import { resolveLocking } from "../modules/paytr/order-guards"
 
 type ReturnRequestedEvent = { order_id: string; return_id: string }
 
@@ -50,29 +52,48 @@ export default async function returnRequestedEmailHandler({
     const adapter = getConfiguredCarrier()
     if (adapter?.createReturn) {
       try {
-        const query = container.resolve(ContainerRegistrationKeys.QUERY)
-        const { data: rows } = await query.graph({
-          entity: "return",
-          fields: ["id", "metadata", "order.fulfillments.canceled_at", "order.fulfillments.data"],
-          filters: { id: data.return_id },
-        })
-        const ret = rows?.[0] as
-          | { metadata?: Record<string, unknown> | null; order?: { fulfillments?: { canceled_at?: unknown; data?: Record<string, unknown> | null }[] } }
-          | undefined
-        const original = (ret?.order?.fulfillments || []).find((f) => !f.canceled_at && adapter.owns(f.data))
-        if (original && !isReturnRejected(ret?.metadata)) {
-          const res = await adapter.createReturn(original.data || {}, data.return_id)
-          returnCode = res.returnCode || res.trackingNumber || null
-          // Mail gitmese de kod iadede kalsın (aksi halde panel "gönderilmedi" der, firmada kayıt açık kalır).
-          if (returnCode) {
-            await recordCarrierReturnCode(container, data.return_id, returnCode, { labelUrl: res.labelUrl ?? null }).catch((err) =>
-              logger.error(`[return-requested-email] iade kodu kaydedilemedi return=${data.return_id} code=${returnCode}: ${String(err)}`)
-            )
-          }
+        // Kabul ve "Kodu yenile" ile aynı kilit: metadata yazımları birbirini ezmez.
+        const opened = await resolveLocking(container).execute(
+          returnLockKey(data.return_id),
+          async () => {
+            const query = container.resolve(ContainerRegistrationKeys.QUERY)
+            const { data: rows } = await query.graph({
+              entity: "return",
+              fields: ["id", "metadata", "order.fulfillments.canceled_at", "order.fulfillments.data"],
+              filters: { id: data.return_id },
+            })
+            const ret = rows?.[0] as
+              | { metadata?: Record<string, unknown> | null; order?: { fulfillments?: { canceled_at?: unknown; data?: Record<string, unknown> | null }[] } }
+              | undefined
+            const meta = ret?.metadata || {}
+            // Kod zaten açılmış (olay yeniden işlendi ya da admin önce yeniledi): firmada ikinci kayıt açma.
+            if (meta.return_code_source === "carrier" && typeof meta.return_code === "string" && meta.return_code) {
+              return {
+                code: meta.return_code,
+                trackingUrl: null,
+                labelUrl: typeof meta.return_label_url === "string" ? meta.return_label_url : null,
+              }
+            }
+            const original = (ret?.order?.fulfillments || []).find((f) => !f.canceled_at && adapter.owns(f.data))
+            if (!original || isReturnRejected(ret?.metadata)) return null
+            const res = await adapter.createReturn!(original.data || {}, data.return_id)
+            const code = res.returnCode || res.trackingNumber || null
+            // Mail gitmese de kod iadede kalsın (aksi halde panel "gönderilmedi" der, firmada kayıt açık kalır).
+            if (code) {
+              await recordCarrierReturnCode(container, data.return_id, code, { labelUrl: res.labelUrl ?? null }).catch((err) =>
+                logger.error(`[return-requested-email] iade kodu kaydedilemedi return=${data.return_id} code=${code}: ${String(err)}`)
+              )
+            }
+            return { code, trackingUrl: res.trackingUrl ?? null, labelUrl: res.labelUrl ?? null }
+          },
+          { timeout: 60, ttl: 180 }
+        )
+        if (opened) {
+          returnCode = opened.code
           tracking = {
-            trackingNumber: returnCode,
-            trackingUrl: res.trackingUrl ?? null,
-            labelUrl: res.labelUrl ?? null,
+            trackingNumber: opened.code,
+            trackingUrl: opened.trackingUrl,
+            labelUrl: opened.labelUrl,
             carrierCode: adapter.name,
           }
         }

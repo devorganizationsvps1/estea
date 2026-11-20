@@ -605,6 +605,50 @@ describe("DHL iade", () => {
     expect(res.data.dhl_return_existed).toBe(true)
   })
 
+  it("iade kaydı iptali: PUT cancelorder/<kod>; olmayan / zaten iptal (404 · 20305) hata değil", async () => {
+    const { fake, adapter } = adapterWith({
+      token,
+      "standardqueryapi/getshipmentstatus": notFound,
+      "standardcmdapi/cancelorder": () => ok({ statusCode: 200, messages: "İşlem Başarılı" }),
+    })
+    await adapter.cancelReturn!(original, "ESC65IABCDEF")
+    expect(fake.calls.find((c) => c.path === "standardcmdapi/cancelorder/ESC65IABCDEF")?.method).toBe("PUT")
+
+    const gone = adapterWith({
+      token,
+      "standardqueryapi/getshipmentstatus": notFound,
+      "standardcmdapi/cancelorder": () => mngError("20305", "SİPARİŞ DETAY BİLGİSİNE ULAŞILAMADI !", 404),
+    })
+    await expect(gone.adapter.cancelReturn!(original, "ESC65IABCDEF")).resolves.toBeUndefined()
+
+    const down = adapterWith({
+      token,
+      "standardqueryapi/getshipmentstatus": notFound,
+      "standardcmdapi/cancelorder": () => mngError("9999", "hata", 500),
+    })
+    await expect(down.adapter.cancelReturn!(original, "ESC65IABCDEF")).rejects.toBeTruthy()
+  })
+
+  it("iade paketi şubeye verilmişse (gönderi no var) iptal edilmez", async () => {
+    const { fake, adapter } = adapterWith({
+      token,
+      "standardqueryapi/getshipmentstatus": () => ok([{ shipmentId: "998877", shipmentStatusCode: "2" }]),
+      "standardcmdapi/cancelorder": () => ok({ statusCode: 200 }),
+    })
+    await expect(adapter.cancelReturn!(original, "ESC65IABCDEF")).rejects.toMatchObject({ code: "DHL_RETURN_IN_TRANSIT" })
+    expect(fake.count("standardcmdapi/cancelorder")).toBe(0)
+  })
+
+  it("iade durumu okunamazsa iptal edilmez (kapalı kal)", async () => {
+    const { fake, adapter } = adapterWith({
+      token,
+      "standardqueryapi/getshipmentstatus": () => mngError("9999", "hata", 500),
+      "standardcmdapi/cancelorder": () => ok({ statusCode: 200 }),
+    })
+    await expect(adapter.cancelReturn!(original, "ESC65IABCDEF")).rejects.toMatchObject({ code: "DHL_RETURN_STATUS_UNKNOWN" })
+    expect(fake.count("standardcmdapi/cancelorder")).toBe(0)
+  })
+
   it("alıcı özeti yoksa (eski/dış gönderi) elle açılsın diye hata", async () => {
     const { adapter } = adapterWith({ token })
     await expect(adapter.createReturn!({ carrier: "dhl", shipment_ref: "1" }, "return_1")).rejects.toMatchObject({ code: "DHL_NO_PARTY" })

@@ -257,6 +257,11 @@ export interface CarrierAdapter {
   getLabel?(data: Record<string, unknown>, format: "pdf" | "zpl"): Promise<Buffer | string>
   /** Kodlu iade / iade etiketi; yoksa iade kodu admin'den elle girilir. */
   createReturn?(originalData: Record<string, unknown>, returnId: string): Promise<CreateReturnResult>
+  /**
+   * Açık iade kaydını firmada iptal eder (iade kodu yenileme). Kayıt yoksa / zaten iptalse
+   * hata vermez. Yoksa yenileme yalnız kodu yeniden açar.
+   */
+  cancelReturn?(originalData: Record<string, unknown>, returnCode: string): Promise<void>
   /** Müşteri takip linki şablonu. */
   trackingUrl(trackingNumber: string): string
   /** Hesap / yetki / bakiye kontrolü (smoke-carrier + günlük denetim). Yoksa adım atlanır. */

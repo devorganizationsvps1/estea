@@ -4,6 +4,19 @@
 > **Sandbox'ta uçtan uca doğrulandı** (aç → barkod → durum → etiket → iptal). Canlı kimlikler bekleniyor.
 > Sırlar bu dosyaya yazılmaz.
 
+## İade kodu yenileme (sandbox, 2026-11-20)
+
+İade siparişi `PUT standardcmdapi/cancelorder/<iade referansı>` ile iptal olur (`200 "İşlem Başarılı"`);
+iptal edilmiş / olmayan kayıtta 404 · 20305 döner. İptalden sonra **aynı referansla** `createReturnOrder`
+yeniden açılır (3002 değil) ve yeni etiket linki (`mn.tc?rtnid=…`) verir; kod (referans) aynı kalır.
+Farklı referansla ikinci iade de açılabiliyor. İade siparişi `getorder` ile sorgulanamıyor (404).
+Admin "Kodu yenile": `lib/return-code-renew.ts` (önce iptal, sonra yeniden aç, müşteriye yeniden mail).
+İptalden önce `getshipmentstatus/<iade referansı>` okunur: gönderi no (shipmentId) varsa paket şubeye
+verilmiştir, iptal edilmez (`DHL_RETURN_IN_TRANSIT`); 404 → henüz barkod yok, iptal serbest; başka hata →
+iptal yok. **Teyit bekliyor:** şubede barkodlanmış iade siparişinin bu uçta shipmentId döndürdüğü canlıda
+görülmedi. İptal başarılı olup yeniden açma düşerse kod iadeden silinir (`return_code_canceled`), panel
+elle girişe döner; olay türü `return.code_failed`.
+
 ## DHL entegrasyon ekibinin yanıtı (2026-11-11)
 
 Ekler: `ynthamzalayesayapizonedorudanapientegrasyon/` (Rest Api Detay Döküman, portal kılavuzu,

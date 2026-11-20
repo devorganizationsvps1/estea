@@ -31,6 +31,7 @@ export const OPS_KIND_LABEL: Record<string, string> = {
   "carrier.health": "Kargo hesabı",
   "return.requested": "İade talebi alındı",
   "return.code_sent": "İade kodu gönderildi",
+  "return.code_failed": "İade kodu alınamadı",
   "return.refund_failed": "İade parası gönderilemedi",
   "return.refunded": "İade yapıldı",
   "return.canceled": "İade iptal edildi",

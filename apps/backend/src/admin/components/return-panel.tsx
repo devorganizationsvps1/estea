@@ -84,6 +84,54 @@ async function acceptItems(
  * kod, tek adımda teslim al (+ otomatik para iadesi) veya reddet.
  * returnId verilirse yalnız o iade gösterilir.
  */
+/**
+ * "Kargo firmasından kod al / Kodu yenile". Yalnız sunucu uygun derse görünür (firma kodlu iade
+ * sunuyor ve siparişte o firmanın gönderisi var); elle kargoda düğme hiç çıkmaz.
+ */
+function CarrierCodeButton({
+  ret,
+  pending,
+  loading,
+  onRenew,
+}: {
+  ret: ReturnRow
+  pending: boolean
+  loading: boolean
+  onRenew: () => void
+}) {
+  const { data } = useQuery({
+    queryKey: ["escay-return-code-renew", ret.id],
+    queryFn: async () => {
+      const res = await fetch(`/admin/returns/${ret.id}/return-code/renew`, { credentials: "include" })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return (await res.json()) as { available: boolean; reason: string | null }
+    },
+    staleTime: 60_000,
+  })
+  if (!data?.available) return null
+  const has = ret.metadata?.return_code_source === "carrier" && ret.metadata?.return_code
+  return (
+    <div>
+      <Button
+        size="small"
+        variant="secondary"
+        disabled={pending}
+        isLoading={loading}
+        onClick={() => {
+          const ok = window.confirm(
+            has
+              ? `Kargo firmasındaki iade kaydı (${ret.metadata?.return_code}) iptal edilip yeniden açılacak ve kod müşteriye tekrar gönderilecek. Müşteri paketi şubeye verdiyse iptal yapılmaz. Devam?`
+              : "Kargo firmasında kodlu iade açılıp kod müşteriye e-postayla gönderilecek. Devam?"
+          )
+          if (ok) onRenew()
+        }}
+      >
+        {has ? "Kodu yenile" : "Kargo firmasından kod al"}
+      </Button>
+    </div>
+  )
+}
+
 export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?: string }) => {
   const qc = useQueryClient()
   const [reasonById, setReasonById] = useState<Record<string, string>>({})
@@ -173,6 +221,27 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
     onError: (err: Error) => toast.error(err.message),
   })
 
+
+  const renewMut = useMutation({
+    mutationFn: async (input: { returnId: string }) => {
+      const res = await fetch(`/admin/returns/${input.returnId}/return-code/renew`, {
+        method: "POST",
+        credentials: "include",
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json?.message || `HTTP ${res.status}`)
+      return json as { code?: string; email?: string }
+    },
+    onSuccess: (json) => {
+      toast.success(`Yeni iade kaydı açıldı (${json.code}), ${json.email || "müşteriye"} gönderildi`)
+      qc.invalidateQueries({ queryKey: ["escay-order-returns", orderId] })
+    },
+    onError: (err: Error) => {
+      toast.error(`İade kodu alınamadı: ${err.message}`)
+      // Eski kod iptal edilip yenisi açılamadıysa panel "gönderildi" göstermesin diye tazele.
+      qc.invalidateQueries({ queryKey: ["escay-order-returns", orderId] })
+    },
+  })
 
   const receiveMut = useMutation({
     mutationFn: (input: { ret: ReturnRow; rows: Record<string, AcceptRow>; reason: string; refundShipping: boolean }) =>
@@ -347,8 +416,16 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
                 </Text>
               ) : r.status === "requested" && !rejected ? (
                 <Text size="small" className="text-ui-fg-error">
-                  Müşteriye iade kodu gitmedi. Kargo panelinden kodlu iade açıp kodu girin.
+                  Müşteriye iade kodu gitmedi. Kargo panelinden açtığınız kodu aşağıya girin.
                 </Text>
+              ) : null}
+              {r.status === "requested" && !rejected ? (
+                <CarrierCodeButton
+                  ret={r}
+                  pending={renewMut.isPending}
+                  loading={renewMut.isPending && renewMut.variables?.returnId === r.id}
+                  onRenew={() => renewMut.mutate({ returnId: r.id })}
+                />
               ) : null}
               {r.status === "requested" && !rejected && !(r.metadata?.return_code && r.metadata?.return_code_sent_at) ? (
                 <div className="flex gap-2">

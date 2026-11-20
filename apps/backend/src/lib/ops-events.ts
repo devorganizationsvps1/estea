@@ -33,6 +33,7 @@ export type OpsEventKind =
   | "carrier.health"
   | "return.requested"
   | "return.code_sent"
+  | "return.code_failed"
   | "return.refund_failed"
   | "return.refunded"
   | "return.canceled"
@@ -77,6 +78,7 @@ const KIND_LABEL: Record<OpsEventKind, string> = {
   "carrier.health": "Kargo hesabı",
   "return.requested": "İade talebi alındı",
   "return.code_sent": "İade kodu gönderildi",
+  "return.code_failed": "İade kodu alınamadı",
   "return.refund_failed": "İade parası gönderilemedi",
   "return.refunded": "İade yapıldı",
   "return.canceled": "İade iptal edildi",
@@ -140,6 +142,7 @@ const FEED_KINDS = new Set<OpsEventKind>([
   "shipment.problem",
   "return.requested",
   "return.refund_failed",
+  "return.code_failed",
   "exchange.requested",
   "exchange.failed",
 ])

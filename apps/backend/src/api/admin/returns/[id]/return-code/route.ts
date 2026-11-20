@@ -33,14 +33,21 @@ export const POST = async (req: AuthenticatedMedusaRequest, res: MedusaResponse)
     throw new MedusaError(MedusaError.Types.NOT_ALLOWED, "Kod yalnız bekleyen (teslim alınmamış) iadeye gönderilir.")
   }
 
+  const sameCarrierCode = ret.metadata?.return_code === code && ret.metadata?.return_code_source === "carrier"
   let email: string
   try {
     ;({ email } = await sendReturnCodeToCustomer(req.scope, {
       returnId,
       orderId: ret.order_id,
       code,
-      source: "manual",
+      // Firmanın kodu yeniden gönderiliyorsa kaynağı "carrier" kalır; yoksa yenileme eski kaydı iptal etmez.
+      source: sameCarrierCode ? "carrier" : "manual",
       actorId: req.auth_context?.actor_id || null,
+      // Firmanın kodunu yeniden gönderirken (SMTP düştüyse) etiket linki de gitsin.
+      labelUrl:
+        sameCarrierCode && typeof ret.metadata?.return_label_url === "string"
+          ? (ret.metadata.return_label_url as string)
+          : null,
     }))
   } catch (error) {
     throw new MedusaError(MedusaError.Types.NOT_ALLOWED, error instanceof Error ? error.message : String(error))
