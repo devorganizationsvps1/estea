@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react"
 import { usePathname } from "next/navigation"
 import { onConsentChange, readConsent, type Consent } from "@/lib/consent"
 import { isProductionHostname } from "@/lib/site"
+import { maskPath, maskUrl, trackerPolicy } from "@/lib/tracking-privacy"
 
 // TODO(K7): Es Çay adına açılan hesapların ID'leri (Dokploy: Environment + Build-time Arguments).
 // Boş bırakılan servis yüklenmez.
@@ -39,35 +40,48 @@ function ensureGtag() {
   addScript("gtag-js", `https://www.googletagmanager.com/gtag/js?id=${GA4_ID || GOOGLE_ADS_ID}`)
 }
 
-/** URL'deki kimlik bilgisi sayılan parametreler (misafir sipariş e-postası, reset/verify token). */
-const SENSITIVE_PARAMS = ["email", "token", "code"]
-/** Bu sayfalarda Meta Pixel PageView gönderilmez (URL'de e-posta/token taşınıyor). */
-const SENSITIVE_PATHS = ["/reset-password", "/verify-email", "/order-tracking"]
-
-/** Analytics'e giden URL: hassas parametre değerleri maskelenir (utm/gclid korunur). */
-function safeLocation(): string {
-  try {
-    const url = new URL(window.location.href)
-    for (const key of SENSITIVE_PARAMS) {
-      if (url.searchParams.has(key)) url.searchParams.set(key, "redacted")
-    }
-    return url.toString()
-  } catch {
-    return window.location.origin + window.location.pathname
-  }
+type ClarityFn = ((...a: unknown[]) => void) & { q?: unknown[] }
+type Fbq = ((...args: unknown[]) => void) & {
+  callMethod?: (...args: unknown[]) => void
+  queue: unknown[]
+  push: Fbq
+  loaded: boolean
+  version: string
+  /** fbevents.js: true ise history değişiminde kendiliğinden PageView atmaz. */
+  disablePushState?: boolean
 }
 
-function isSensitivePath(): boolean {
-  return SENSITIVE_PATHS.some((p) => window.location.pathname.startsWith(p))
+function currentHref() {
+  return window.location.href
 }
+
+/** GA config / page_view için maskelenmiş adres alanları. */
+function gaLocation() {
+  const loc: Record<string, string> = {}
+  const page = maskUrl(currentHref())
+  if (page) loc.page_location = page
+  const ref = document.referrer ? maskUrl(document.referrer) : ""
+  if (ref) loc.page_referrer = ref
+  return loc
+}
+
+let ga4Configured = false
+let adsConfigured = false
+/** Clarity hassas sayfada durduruldu; aynı sayfa ömründe yeniden başlatılmaz. */
+let clarityStopped = false
+let pixelRevoked = false
 
 function loadAnalytics() {
-  if (GA4_ID) {
+  const policy = trackerPolicy(currentHref())
+  if (GA4_ID && !ga4Configured) {
     ensureGtag()
-    window.gtag?.("config", GA4_ID, { page_location: safeLocation() })
+    ga4Configured = true
+    window.gtag?.("config", GA4_ID, gaLocation())
   }
-  if (CLARITY_ID && !document.getElementById("clarity-js")) {
-    const w = window as unknown as { clarity?: { q?: unknown[] } & ((...a: unknown[]) => void) }
+  // Clarity tam URL'yi ve ekranı kaydeder: hassas sayfada hiç yüklenmez. İlk açılış
+  // hassassa sonraki güvenli sayfada (client navigasyon) yüklenir.
+  if (CLARITY_ID && policy.clarity && !clarityStopped && !document.getElementById("clarity-js")) {
+    const w = window as unknown as { clarity?: ClarityFn }
     w.clarity =
       w.clarity ||
       Object.assign(
@@ -81,18 +95,14 @@ function loadAnalytics() {
 }
 
 function loadMarketing() {
-  if (GOOGLE_ADS_ID) {
+  const policy = trackerPolicy(currentHref())
+  if (GOOGLE_ADS_ID && !adsConfigured) {
     ensureGtag()
-    window.gtag?.("config", GOOGLE_ADS_ID, { page_location: safeLocation() })
+    adsConfigured = true
+    window.gtag?.("config", GOOGLE_ADS_ID, gaLocation())
   }
-  if (META_PIXEL_ID && !window.fbq) {
-    type Fbq = ((...args: unknown[]) => void) & {
-      callMethod?: (...args: unknown[]) => void
-      queue: unknown[]
-      push: Fbq
-      loaded: boolean
-      version: string
-    }
+  // Pixel her olayda tam URL'yi (dl) yollar: hassas sayfada init edilmez.
+  if (META_PIXEL_ID && policy.pixel && !window.fbq) {
     const fbq = function (...args: unknown[]) {
       if (fbq.callMethod) fbq.callMethod(...args)
       else fbq.queue.push(args)
@@ -101,10 +111,37 @@ function loadMarketing() {
     fbq.loaded = true
     fbq.version = "2.0"
     fbq.queue = []
+    // PageView'i biz atıyoruz (hassas sayfa hariç); fbevents.js'in history dinleyicisi
+    // hassas sayfaya geçişte de kendiliğinden atardı.
+    fbq.disablePushState = true
     window.fbq = fbq
     addScript("fb-pixel", "https://connect.facebook.net/en_US/fbevents.js")
+    // Otomatik olaylar (buton tıklama, sayfa meta verisi) kapalı.
+    window.fbq("set", "autoConfig", false, META_PIXEL_ID)
     window.fbq("init", META_PIXEL_ID)
-    if (!isSensitivePath()) window.fbq("track", "PageView")
+    window.fbq("track", "PageView")
+  }
+}
+
+/**
+ * Client navigasyonunda hassas sayfaya girilirse yüklü takipçiler susturulur.
+ * Clarity: "stop" (kayıt sayfa yenilenene dek kapalı kalır). Pixel: consent revoke,
+ * güvenli sayfada grant.
+ */
+function guardNavigation() {
+  const policy = trackerPolicy(currentHref())
+  if (!policy.clarity && document.getElementById("clarity-js") && !clarityStopped) {
+    clarityStopped = true
+    ;(window as unknown as { clarity?: ClarityFn }).clarity?.("stop")
+  }
+  if (window.fbq) {
+    if (!policy.pixel && !pixelRevoked) {
+      pixelRevoked = true
+      window.fbq("consent", "revoke")
+    } else if (policy.pixel && pixelRevoked) {
+      pixelRevoked = false
+      window.fbq("consent", "grant")
+    }
   }
 }
 
@@ -133,11 +170,18 @@ export function Analytics() {
       first.current = false
       return
     }
+    guardNavigation()
+    // İlk açılış hassas sayfaysa ertelenen takipçiler güvenli sayfada yüklenir.
+    const consent = readConsent()
+    const hadPixel = Boolean(window.fbq)
+    apply(consent)
+    const page = maskUrl(currentHref())
     window.gtag?.("event", "page_view", {
-      page_location: safeLocation(),
-      page_path: pathname,
+      ...(page ? { page_location: page } : {}),
+      page_path: maskPath(pathname),
     })
-    if (!isSensitivePath()) window.fbq?.("track", "PageView")
+    // Yeni yüklenen Pixel PageView'ini init'te attı.
+    if (hadPixel && trackerPolicy(currentHref()).pixel) window.fbq?.("track", "PageView")
   }, [pathname])
 
   return null

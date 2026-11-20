@@ -11,7 +11,7 @@ const POLL_INTERVAL_MS = 2000
 // Sunucu her sorguda PayTR'ye de sorar (bildirim gelmese de); 3 dk bekleme yeterli.
 const POLL_LIMIT_MS = 180_000
 
-type ResultState = "waiting" | "pending" | "attention"
+type ResultState = "waiting" | "pending" | "attention" | "not_paid"
 
 /**
  * Sipariş PayTR bildirimi işlenince oluşur; müşteri çoğu zaman bildirimden önce döner.
@@ -39,6 +39,10 @@ export function PaytrResultPoller({ oid }: { oid: string }) {
         if (!stopped) setState("attention")
         return
       }
+      if (res.state === "not_paid") {
+        setState("not_paid")
+        return
+      }
       if (res.state === "unknown") {
         setState("pending")
         return
@@ -58,6 +62,39 @@ export function PaytrResultPoller({ oid }: { oid: string }) {
   }, [oid])
 
   const waiting = state === "waiting"
+
+  if (state === "not_paid") {
+    return (
+      <div className="checkout-result" role="status" aria-live="polite" data-testid="paytr-result" data-state="not_paid">
+        <span className="checkout-result__disc checkout-result__disc--fail" aria-hidden>
+          <svg viewBox="0 0 24 24" width="24" height="24">
+            <path d="M7 7l10 10M17 7L7 17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+        </span>
+        <h1 className="checkout-result__title">Ödeme alınamadı</h1>
+        <p className="checkout-result__text">
+          Kullandığınız kart gerçek ödeme kabul etmiyor; kartınızdan para çekilmedi ve sipariş
+          oluşturulmadı. Sepetiniz duruyor, başka bir kartla tekrar deneyebilirsiniz.
+        </p>
+        {oid ? (
+          <p className="checkout-result__ref">
+            İşlem referansı <span>{oid}</span>
+          </p>
+        ) : null}
+        <div className="checkout-result__actions">
+          <Link href="/odeme" className="cart-cta cart-cta--primary">
+            Tekrar dene
+          </Link>
+          <Link href="/sepet" className="cart-cta">
+            Sepete dön
+          </Link>
+        </div>
+        <p className="checkout-result__help">
+          Sorun sürerse <a href="tel:+904626923061">0462 692 30 61</a> numarasından bize ulaşın.
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div

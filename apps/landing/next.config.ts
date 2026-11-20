@@ -1,5 +1,6 @@
 import path from 'node:path'
 import type { NextConfig } from 'next'
+import { posts } from './src/data/posts'
 
 // Telefondan yerel ağ IP'siyle (ör. http://192.168.1.20:3020) açınca Next 16 dev
 // sunucusu JS/HMR isteklerini engeller; sayfa hydrate olmaz, menü açılmaz.
@@ -45,6 +46,11 @@ const nextConfig: NextConfig = {
         headers: [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }],
       },
     ]
+  },
+  // Eski WordPress sitesinde yazılar kökteydi (esteacay.com/<slug>/); şimdi /blog/<slug>.
+  // Sondaki eğik çizgiyi Next önce kendisi atar (308), ardından bu 301 çalışır.
+  async redirects() {
+    return posts.map((p) => ({ source: `/${p.slug}`, destination: `/blog/${p.slug}`, statusCode: 301 as const }))
   },
   // Dockerfile.landing: .next/standalone tek başına çalışır (node apps/landing/server.js).
   output: 'standalone',

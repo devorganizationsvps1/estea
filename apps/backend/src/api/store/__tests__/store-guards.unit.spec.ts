@@ -75,6 +75,36 @@ describe("stripReservedCartMetadata", () => {
     ])
   })
 
+  describe("payment_method", () => {
+    const env = { ...process.env }
+    afterEach(() => {
+      process.env = { ...env }
+    })
+    const run = (payment_method: unknown) => {
+      const body = { metadata: { payment_method } as Record<string, unknown> }
+      stripReservedCartMetadata({ body } as never, res() as never, jest.fn())
+      return body.metadata
+    }
+
+    it("havale kapalıyken bank_transfer silinir, card kalır", () => {
+      delete process.env.BANK_TRANSFER_ENABLED
+      expect(run("bank_transfer")).toEqual({})
+      expect(run("card")).toEqual({ payment_method: "card" })
+    })
+
+    it("bilinmeyen değer silinir", () => {
+      expect(run("cash")).toEqual({})
+      expect(run({ x: 1 })).toEqual({})
+    })
+
+    it("havale açık ve banka bilgisi tamsa bank_transfer kalır", () => {
+      process.env.BANK_TRANSFER_ENABLED = "1"
+      process.env.BANK_TRANSFER_IBAN = "TR000000000000000000000000"
+      process.env.BANK_TRANSFER_ACCOUNT_NAME = "Hamzalı Çay"
+      expect(run("bank_transfer")).toEqual({ payment_method: "bank_transfer" })
+    })
+  })
+
   it("sepet oluştururken items[].metadata ağırlık/boyutu silinir", () => {
     const body = {
       items: [
@@ -87,7 +117,7 @@ describe("stripReservedCartMetadata", () => {
   })
 
   it("satır metadata'sı ağırlık/boyut dışında korunur", () => {
-    const body = { metadata: { weight_g: 1, width: 2, gift: true } }
+    const body = { metadata: { weight_g: 1, width: 2, gift: true, escay_exchange_for_item_id: "li_x", escay_exchange_return_id: "ret_x" } }
     stripReservedLineItemMetadata({ body } as never, res() as never, jest.fn())
     expect(body.metadata).toEqual({ gift: true })
   })

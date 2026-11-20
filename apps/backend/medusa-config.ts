@@ -47,6 +47,20 @@ function assertStrongSecrets(): void {
   if (problems.length) {
     throw new Error(`Güvensiz oturum sırları (${problems.join("; ")}). Üret: openssl rand -base64 32`)
   }
+
+  // Mail linkleri, logo ve şifre sıfırlama adresi STOREFRONT_URL'den kurulur; boşsa
+  // müşteriye http://localhost:3025 linki gider (container içinde 0.0.0.0 dersi).
+  let storefrontHost = ""
+  try {
+    storefrontHost = new URL((process.env.STOREFRONT_URL ?? "").trim()).hostname
+  } catch {
+    storefrontHost = ""
+  }
+  if (!storefrontHost || ["localhost", "127.0.0.1", "0.0.0.0", "::1"].includes(storefrontHost)) {
+    throw new Error(
+      "STOREFRONT_URL tanımsız ya da yerel adres; mail linkleri müşteriye çalışmayan adresle gider. Ör. STOREFRONT_URL=https://market.esteacay.com"
+    )
+  }
 }
 
 assertStrongSecrets()

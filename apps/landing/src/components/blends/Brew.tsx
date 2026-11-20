@@ -32,7 +32,7 @@ export default function Brew() {
           </ol>
           <p className="mt-7 max-w-[46ch] text-[1.125rem] leading-[1.6] text-ink/75">{brew.note}</p>
           <div className="mt-8">
-            <Btn href={brew.link.href} variant="garden" external>
+            <Btn href={brew.link.href} variant="garden">
               {brew.link.label}
             </Btn>
           </div>

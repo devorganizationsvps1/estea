@@ -3,6 +3,7 @@ import type {
   MedusaRequest,
   MedusaResponse,
 } from "@medusajs/framework/http"
+import { BANK_TRANSFER_METHOD, bankTransferInfo } from "../../lib/bank-transfer"
 
 /**
  * Store API metadata'sı istemciden gelir ama bazı anahtarlar sunucu tarafında
@@ -17,7 +18,6 @@ import type {
  * yalnız mağazanın yazdığı anahtarlar geçer; yenisi eklenirse buraya da eklenmeli.
  */
 const CART_ALLOWED = new Set([
-  "payment_method",
   "marketing_consent",
   "tracking_consent",
   "legal_accepted_at",
@@ -47,8 +47,23 @@ function stripItems(items: unknown): void {
   }
 }
 
-const isLineItemReserved = (key: string) => LINE_ITEM_RESERVED.has(key)
-const isCartReserved = (key: string) => !CART_ALLOWED.has(key)
+// escay_* satır anahtarları (değişim bağı vb.) yalnız sunucu yazar (lib/exchange.ts okur).
+const isLineItemReserved = (key: string) => LINE_ITEM_RESERVED.has(key) || key.startsWith("escay_")
+const isCartReserved = (key: string) => !CART_ALLOWED.has(key) && key !== "payment_method"
+
+/**
+ * payment_method fatura notunu, sözleşmeyi, onay mailini ve admin listelerini belirler.
+ * Yalnız "card" ya da havale gerçekten açıkken (BANK_TRANSFER_* tam) "bank_transfer" kalır;
+ * havale kapalıyken "bank_transfer" yazılıp kartla ödenen sipariş havale gibi görünmesin.
+ */
+function stripPaymentMethod(metadata: unknown): void {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return
+  const m = metadata as Record<string, unknown>
+  if (!("payment_method" in m)) return
+  const v = m.payment_method
+  const ok = v === "card" || (v === BANK_TRANSFER_METHOD && bankTransferInfo() !== null)
+  if (!ok) delete m.payment_method
+}
 
 /** POST /store/carts ve /store/carts/:id — sepet metadata'sı + (oluşturmada) items[].metadata */
 export function stripReservedCartMetadata(
@@ -61,6 +76,7 @@ export function stripReservedCartMetadata(
     (req as { validatedBody?: { metadata?: unknown; items?: unknown } }).validatedBody,
   ]) {
     strip(body?.metadata, isCartReserved)
+    stripPaymentMethod(body?.metadata)
     stripItems(body?.items)
   }
   next()

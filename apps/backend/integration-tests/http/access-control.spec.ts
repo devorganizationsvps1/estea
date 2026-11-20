@@ -33,6 +33,7 @@ const ADMIN_ROUTES: [method: "get" | "post", path: string][] = [
   ["post", "/admin/orders/order_x/bizimhesap-invoice/retry"],
   ["post", "/admin/orders/order_x/contracts"],
   ["get", "/admin/orders/order_x/contracts/distance-sales"],
+  ["post", "/admin/orders/order_x/escay-cancel"],
   ["post", "/admin/orders/order_x/escay-status"],
   ["get", "/admin/orders/order_x/exchange"],
   ["post", "/admin/orders/order_x/exchange"],
@@ -41,6 +42,7 @@ const ADMIN_ROUTES: [method: "get" | "post", path: string][] = [
   ["post", "/admin/orders/order_x/fulfillment/reship"],
   ["post", "/admin/orders/order_x/fulfillment/retry"],
   ["post", "/admin/returns/ret_x/accept"],
+  ["post", "/admin/returns/ret_x/cancel-request"],
   ["post", "/admin/returns/ret_x/exchange"],
   ["post", "/admin/returns/ret_x/exchange/cancel"],
   ["post", "/admin/returns/ret_x/exchange/reship"],
@@ -130,6 +132,37 @@ medusaIntegrationTestRunner({
       it.each(CUSTOMER_ROUTES)("müşteri %s %s girişsiz 401", async (method, path) => {
         const res = await call(api as never, method, path, { ...fx.storeHeaders, ...noThrow })
         expect(res.status).toEqual(401)
+      })
+
+      it("Medusa'nın kendi iade/iptal/değişim uçları admin token'ıyla da 403; Es Çay uçları açık", async () => {
+        const admin = await createAdminHeaders(getContainer())
+        const blocked: [string, string][] = [
+          ["post", "/admin/payments/pay_x/refund"],
+          ["post", "/admin/orders/order_x/cancel"],
+          ["post", "/admin/returns"],
+          ["post", "/admin/returns/ret_x"],
+          ["post", "/admin/returns/ret_x/cancel"],
+          ["post", "/admin/returns/ret_x/receive"],
+          ["post", "/admin/returns/ret_x/receive/confirm"],
+          ["post", "/admin/returns/ret_x/receive-items"],
+          ["post", "/admin/returns/ret_x/dismiss-items"],
+          ["post", "/admin/returns/ret_x/request"],
+          ["post", "/admin/returns/ret_x/request-items"],
+          ["delete", "/admin/returns/ret_x/request-items/act_x"],
+          ["post", "/admin/exchanges"],
+          ["post", "/admin/exchanges/exc_x/inbound/items"],
+          ["post", "/admin/claims"],
+          ["post", "/admin/order-edits"],
+          ["post", "/admin/order-edits/order_x/confirm"],
+        ]
+        for (const [m, p] of blocked) {
+          const res = await call(api as never, m, p, { ...admin, ...noThrow })
+          expect({ p, status: res.status }).toEqual({ p, status: 403 })
+        }
+        for (const [m, p] of [["post", "/admin/returns/ret_x/accept"], ["post", "/admin/returns/ret_x/refund"], ["get", "/admin/returns/ret_x"]]) {
+          const res = await call(api as never, m, p, { ...admin, ...noThrow })
+          expect({ p, blocked: res.status === 403 }).toEqual({ p, blocked: false })
+        }
       })
 
       it("admin token'ıyla liste uçları açılır", async () => {

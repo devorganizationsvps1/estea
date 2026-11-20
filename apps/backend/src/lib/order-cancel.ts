@@ -1,3 +1,4 @@
+import { withOrderMoneyLock } from "./order-money-lock"
 import type { MedusaContainer } from "@medusajs/framework/types"
 import { ContainerRegistrationKeys, MedusaError, Modules } from "@medusajs/framework/utils"
 import { cancelOrderWorkflow } from "@medusajs/medusa/core-flows"
@@ -54,6 +55,14 @@ export function orderCancelBlocker(order: Pick<OrderRow, "status" | "canceled_at
  *  3) Olay kaydı + müşteriye iptal maili. Kesilmiş fatura varsa elle iade faturası uyarısı.
  */
 export async function cancelUnshippedOrder(
+  scope: MedusaContainer,
+  input: { orderId: string; reason?: string | null; actorId?: string | null }
+): Promise<CancelOrderResult> {
+  // İptal parayı iade eder: aynı sipariş için iade ya da ikinci iptalle aynı anda çalışmaz.
+  return withOrderMoneyLock(scope, input.orderId, () => cancelUnshippedOrderUnlocked(scope, input))
+}
+
+async function cancelUnshippedOrderUnlocked(
   scope: MedusaContainer,
   input: { orderId: string; reason?: string | null; actorId?: string | null }
 ): Promise<CancelOrderResult> {

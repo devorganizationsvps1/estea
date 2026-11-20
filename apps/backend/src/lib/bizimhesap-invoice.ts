@@ -84,6 +84,22 @@ export function buildInvoiceNote(
   return `Es Çay sipariş ${displayId}. İnternet satışı: ${url}. Ödeme: ${payment}, ${date}.`
 }
 
+type InvoicePaymentRow = {
+  captures?: { amount?: unknown; created_at?: string | Date | null }[] | null
+  refunds?: { amount?: unknown }[] | null
+}
+
+/** İlk tahsilatın günü (YYYY-MM-DD, İstanbul); yoksa undefined → bugün. */
+export function firstCaptureDate(payments: InvoicePaymentRow[]): string | undefined {
+  const dates = payments
+    .flatMap((p) => p.captures || [])
+    .map((c) => (c.created_at ? new Date(c.created_at) : null))
+    .filter((d): d is Date => Boolean(d) && !Number.isNaN((d as Date).getTime()))
+    .sort((a, b) => a.getTime() - b.getTime())
+  if (!dates.length) return undefined
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Istanbul" }).format(dates[0])
+}
+
 /** Metadata taze okunur: aynı anda yazan başka akışın alanları ezilmesin. */
 async function writeInvoiceMeta(
   scope: MedusaContainer,
@@ -184,6 +200,9 @@ async function issueUnderLock(
       "items.discount_total",
       "items.tax_lines.rate",
       "items.adjustments.amount",
+      "payment_collections.payments.captures.amount",
+      "payment_collections.payments.captures.created_at",
+      "payment_collections.payments.refunds.amount",
       "shipping_address.first_name",
       "shipping_address.last_name",
       "shipping_address.phone",
@@ -244,6 +263,7 @@ async function issueUnderLock(
         }[]
         shipping_address?: Address | null
         billing_address?: Address | null
+        payment_collections?: { payments?: InvoicePaymentRow[] | null }[] | null
         customer?: {
           id?: string | null
           email?: string | null
@@ -270,7 +290,17 @@ async function issueUnderLock(
   const existing = (order.metadata?.bizimhesap_invoice ||
     null) as BizimhesapOrderInvoiceMeta | null
 
-  if (existing?.status === "created" || existing?.status === "dry_run") {
+  // Mock / dry-run sonucu gerçek fatura değildir: gerçek bağlantı açılınca fatura gönderilir
+  // (eskiden FIRM_ID sonradan girilse de bu siparişler "created" sanılıp hiç kesilmiyordu).
+  const bizimhesapSvc = scope.resolve(BIZIMHESAP_MODULE) as BizimhesapModuleService
+  const sendsForReal =
+    bizimhesapSvc.getConnectionStatus().mode === "live" && !bizimhesapSvc.isDryRun()
+  const existingIsReal = existing?.status === "created" && existing.mode === "live"
+  if (existing && sendsForReal && !existingIsReal && (existing.status === "created" || existing.status === "dry_run")) {
+    logger.warn(
+      `[bizimhesap-invoice] Önceki kayıt ${existing.mode}/${existing.status} — order=${orderId}; gerçek fatura şimdi gönderiliyor`
+    )
+  } else if (existing?.status === "created" || existing?.status === "dry_run") {
     logger.info(
       `[bizimhesap-invoice] Idempotent skip — order=${orderId} status=${existing.status} guid=${existing.guid || "-"}`
     )
@@ -284,6 +314,28 @@ async function issueUnderLock(
       `[bizimhesap-invoice] Skip — order=${orderId} status=${existing.status}: kayıt oluşmuş olabilir, admin onayı gerekir`
     )
     return { ok: false, skipped: true, meta: existing }
+  }
+
+  // Parası tamamen iade edilmiş (iptalsiz) sipariş faturalanmaz.
+  const payments = (order.payment_collections || []).flatMap((pc) => pc.payments || [])
+  const capturedTotal = payments.reduce(
+    (s, p) => s + (p.captures || []).reduce((a, c) => a + asNumber(c.amount), 0),
+    0
+  )
+  const refundedTotal = payments.reduce(
+    (s, p) => s + (p.refunds || []).reduce((a, r) => a + asNumber(r.amount), 0),
+    0
+  )
+  if (capturedTotal > 0 && refundedTotal >= capturedTotal - 0.01) {
+    const meta: BizimhesapOrderInvoiceMeta = {
+      status: "skipped",
+      mode: existing?.mode || "mock",
+      error: "Order fully refunded",
+      at: new Date().toISOString(),
+      note: "refunded",
+    }
+    await writeInvoiceMeta(scope, orderId, meta)
+    return { ok: false, skipped: true, meta }
   }
 
   if (order.status === "canceled") {
@@ -340,6 +392,8 @@ async function issueUnderLock(
       invoiceNo: displayId,
       note: buildInvoiceNote(displayId, {
         bankTransfer: isBankTransferOrder(order),
+        // Nottaki tarih ödemenin tarihi (fatura kesim günü değil)
+        date: firstCaptureDate(payments),
       }),
       currencyCode: order.currency_code,
       customer: invoiceCustomer.customer,

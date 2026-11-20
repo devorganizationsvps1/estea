@@ -19,17 +19,19 @@ export type PackageProfile = {
   width: number
   /** cm */
   height: number
-  /**
-   * Yükseklik, adet arttıkça büyür (paketler üst üste istiflenir) ama
-   * bu değeri aşmaz. Kargo desi hesabının kontrolden çıkmasını engeller.
-   */
+  /** İstiflenen yükseklik bu değeri aşmaz. */
   maxHeight: number
+  /**
+   * true: profil tek paketin ölçüsüdür, yükseklik adetle istiflenir (maxHeight'a kadar).
+   * Yoksa profil siparişin girdiği kolidir ve adetle büyümez.
+   */
+  stack?: boolean
 }
 
 /**
  * Çay varsayılan kolisi — TODO(K1/K4): gerçek paketle ölç ve SHIPPING_PACKAGE_DEFAULT ile ez.
  * 30×20×15 cm → 3 desi; ağırlık: kalem metadata.weight_kg, yoksa varyant adındaki gramaj, yoksa 0,5 kg × adet.
- * maxHeight 45: koli adetle yükselir ama 3 koli boyunu aşmaz.
+ * Koli adetle büyümez; maxHeight yalnız paket başı ölçü girilen kalemlerin istifine sınırdır.
  */
 export const DEFAULT_PACKAGE_PROFILE: PackageProfile = {
   weight: 0.5,
@@ -79,6 +81,7 @@ export function parsePackageProfile(raw?: string | null): PackageProfile {
     height: positiveNumber(parsed.height) ?? DEFAULT_PACKAGE_PROFILE.height,
     maxHeight:
       positiveNumber(parsed.maxHeight) ?? DEFAULT_PACKAGE_PROFILE.maxHeight,
+    ...(parsed.stack === true ? { stack: true } : {}),
   }
 }
 
@@ -174,9 +177,9 @@ function round2(value: number): number {
  * ağırlık yoksa profil ağırlığı × toplam adet kullanılır. Sonuç asla profildeki
  * minimumun altına inmez.
  *
- * Boyut: kalemlerde açık boyut varsa her eksende en büyüğü alınır, yoksa
- * profildeki koli kullanılır. Her iki durumda da yükseklik adet sayısıyla
- * doğru orantılı büyür (istifleme) ve `maxHeight` ile sınırlanır.
+ * Boyut: kalemlerde açık (paket başı) boyut varsa her eksende en büyüğü alınır ve
+ * yükseklik adetle istiflenir (`maxHeight` ile sınırlı). Yoksa profildeki koli olduğu
+ * gibi kullanılır; adet desiyi büyütmez, ağır siparişte DHL ağırlıktan ücretlendirir.
  */
 export function resolvePackage(
   items: PackageItemInput[],
@@ -216,8 +219,14 @@ export function resolvePackage(
     }
   }
 
-  const baseHeight = anyItemDimensions ? maxHeight : profile.height
-  const stackedHeight = Math.min(baseHeight * totalUnits, profile.maxHeight)
+  // Profil varsayılan olarak siparişin girdiği kolidir: adetle büyümez (eskiden 2 adet 6 desi,
+  // 3+ adet 9 desi gidiyordu; Mareen'deki desi şişmesi). İstifleme yalnız kalemlerde paket
+  // başı ölçü girilmişse ya da profilde açıkça `stack: true` varsa, maxHeight'a kadar.
+  const stackedHeight = anyItemDimensions
+    ? Math.min(maxHeight * totalUnits, Math.max(profile.maxHeight, maxHeight))
+    : profile.stack === true
+      ? Math.min(profile.height * totalUnits, profile.maxHeight)
+      : profile.height
 
   return {
     weight: round2(Math.max(weightFromItems, profile.weight)),

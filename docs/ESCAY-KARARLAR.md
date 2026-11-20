@@ -45,6 +45,8 @@ Para alınıp sipariş açılamayan durumlar. **Hiçbirinde otomatik iade yok**,
 | Sipariş açılmış ama iptal edilmiş, tahsilat eksik | `review` (`order_canceled`); iptal siparişe tahsilat yazılmaz |
 | PayTR panelinden iade edilmiş (`pending` ya da `paid`) | `refunded`; sipariş açılmaz, deneme durur |
 
+Para alınmayan özel durum: **canlı modda test kartı** (`PAYTR_TEST_MODE=0`, bildirimde ya da durum sorgusunda `test_mode=1`) → sipariş açılmaz, kayıt `expired` (`last_error` `test_mode:` ile başlar), Logs'a `payment.failed`, sonuç sayfası `not_paid` → "Ödeme alınamadı", sepet açık kalır.
+
 Müşteri tarafı: sonuç sayfası `completed` → onay, `processing` → bekler (90 sn sonra sepet bırakılır ama ödenen sepet kimliği `_escay_paytr_cart` çerezinde kalır; geç bildirim sonrası yenileme yine onaya gider), `attention` (`review` / `refunded`) → "ödemeniz alındı, sipariş inceleniyor, yeniden ödemeyin".
 
 Kilitler Redis'te (`@medusajs/medusa/locking-redis`, `medusa-config.ts`): aynı numara için callback / durum sorgusu / temizlik işi süreçler arası sıralanır; `expired` yazımı kilit altında ve yalnız hâlâ `pending` ise. Prod'da `REDIS_URL` şart (event-bus zaten istiyor).

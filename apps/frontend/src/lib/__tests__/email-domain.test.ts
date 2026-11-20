@@ -121,3 +121,17 @@ describe("emailDomainAcceptsMail", () => {
     expect(dns.resolveMx).toHaveBeenCalledTimes(2)
   })
 })
+
+describe("emailTypoSuggestion", () => {
+  it("bilinen yazım hatasında doğru adresi önerir", async () => {
+    const { emailTypoSuggestion } = await import("../email-domain")
+    expect(emailTypoSuggestion("Ayse.Yilmaz@GMIAL.com")).toBe("Ayse.Yilmaz@gmail.com")
+    expect(emailTypoSuggestion("a@hotmail.con")).toBe("a@hotmail.com")
+  })
+  it("doğru ya da bilinmeyen alan adında öneri yok", async () => {
+    const { emailTypoSuggestion } = await import("../email-domain")
+    expect(emailTypoSuggestion("a@gmail.com")).toBeNull()
+    expect(emailTypoSuggestion("a@esteacay.com")).toBeNull()
+    expect(emailTypoSuggestion("bozuk")).toBeNull()
+  })
+})

@@ -60,6 +60,7 @@ describe("acceptReturnItems", () => {
         if (key === ContainerRegistrationKeys.QUERY) return { graph: async () => ({ data: [ret] }) }
         if (key === Modules.ORDER) return { updateReturns }
         if (key === ContainerRegistrationKeys.LOGGER) return { warn: jest.fn(), info: jest.fn() }
+        if (key === Modules.LOCKING) return { execute: async (_k: unknown, job: () => Promise<unknown>) => job() }
         throw new Error(key)
       },
     }

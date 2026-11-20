@@ -513,7 +513,7 @@ ${customerNote ? `\nMüşteri notu:\n${customerNote}\n` : "\nMüşteri notu yok.
   return { subject, html, text }
 }
 
-/** 3) Müşteriye — iade onaylandı & para iade edildi */
+/** 3) Müşteriye — iade onaylandı, para ödeme kuruluşuna iletildi (tamamlanma: paytr-refund-tracking) */
 export function buildReturnRefundedCustomerEmail(
   data: ReturnRefundedCustomerData
 ): { subject: string; html: string; text: string } {
@@ -531,7 +531,7 @@ export function buildReturnRefundedCustomerEmail(
   const html = emailLayout(`
     <h1 style="margin:0 0 8px;font-size:22px;color:${EMAIL_STYLES.brandColor};">İadeniz onaylandı</h1>
     <p style="margin:0 0 24px;font-size:15px;color:${EMAIL_STYLES.mutedColor};line-height:24px;">
-      Ürününüz tarafımıza ulaştı ve iade işleminiz tamamlandı.
+      Ürününüz tarafımıza ulaştı; iade tutarı kartınıza iade edilmek üzere ödeme kuruluşuna iletildi.
     </p>
 
     <p style="margin:0 0 24px;padding:16px;background:${EMAIL_STYLES.bgColor};border-radius:6px;font-size:15px;line-height:22px;">
@@ -560,7 +560,7 @@ export function buildReturnRefundedCustomerEmail(
     }
 
     <p style="margin:0 0 16px;font-size:14px;line-height:22px;color:${EMAIL_STYLES.mutedColor};">
-      İade, ödemeyi yaptığınız araca (kredi / banka kartı) yapılmıştır. Tutar azami
+      İade, ödemeyi yaptığınız karta (kredi / banka kartı) yapılır. Tutar azami
       <strong>14 gün</strong> içinde hesabınıza yansır; bankaya yansıma süresi bankanızın
       işlem sürecine bağlıdır.
     </p>
@@ -582,7 +582,7 @@ ${
       }\n`
     : ""
 }
-İade, ödemeyi yaptığınız araca (kredi / banka kartı) yapılmıştır. Tutar azami 14 gün içinde hesabınıza yansır; bankaya yansıma süresi bankanızın işlem sürecine bağlıdır.
+İade, ödemeyi yaptığınız karta (kredi / banka kartı) yapılır. Tutar azami 14 gün içinde hesabınıza yansır; bankaya yansıma süresi bankanızın işlem sürecine bağlıdır.
 
 Sorularınız için: ${COMPANY.emailOps}
 

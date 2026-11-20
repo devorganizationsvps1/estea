@@ -6,7 +6,7 @@ import {
   seedStorefrontFixture,
   type StorefrontFixture,
 } from "./helpers/storefront-fixture"
-import { placeGuestStubOrder } from "./helpers/place-order"
+import { placeGuestStubOrder, placePaidCardOrder } from "./helpers/place-order"
 import { ensureTestReturnReason } from "./helpers/return-reason"
 import {
   deliverOrderFulfillment,
@@ -14,6 +14,9 @@ import {
   shipOrderFulfillment,
 } from "./helpers/fulfill-order"
 import { rejectStoreReturn } from "../../src/lib/return-rejection"
+import { acceptReturnItems } from "../../src/lib/return-acceptance"
+import { processReturnRefund, paidPricePerUnit } from "../../src/lib/return-refund"
+import { createPromotionsWorkflow } from "@medusajs/medusa/core-flows"
 
 jest.setTimeout(120 * 1000)
 
@@ -322,6 +325,76 @@ medusaIntegrationTestRunner({
           filters: { order_id: order.id },
         })
         expect(data.filter((r: { status?: string }) => r.status !== "canceled").length).toEqual(1)
+      })
+
+      it("3 adetli ödenmiş siparişte 1 adet iade → yalnız o adedin ödenen fiyatı geri gider", async () => {
+        const email = `ret-partial-${Date.now()}@escay.test`
+        const order = await placePaidCardOrder(api, getContainer(), fx, variantId, email, { quantity: 3 })
+        const itemId = await firstOrderItemId(getContainer(), order.id, order.items[0]?.id)
+        const fulfillment = await fulfillOrderItems(getContainer(), {
+          orderId: order.id,
+          itemId,
+          quantity: 3,
+          locationId: fx.stockLocationId,
+          shippingOptionId: fx.shippingOptionId,
+        })
+        const fid = (fulfillment as { id: string }).id
+        await shipOrderFulfillment(getContainer(), { orderId: order.id, fulfillmentId: fid, itemId, quantity: 3 })
+        await deliverOrderFulfillment(getContainer(), { orderId: order.id, fulfillmentId: fid })
+
+        const query = getContainer().resolve(ContainerRegistrationKeys.QUERY)
+        const { data: [before] } = await query.graph({
+          entity: "order",
+          fields: ["id", "total", "shipping_total", "items.id", "items.unit_price", "items.quantity", "items.total", "items.detail.quantity"],
+          filters: { id: order.id },
+        })
+        const line = (before as any).items[0]
+        const perUnit = Math.round((Number(line.total) / 3) * 100) / 100
+        expect(perUnit).toBeGreaterThan(0)
+
+        const created = await postGuestReturn(order.id, email, itemId)
+        expect(statusOf(created)).toEqual(200)
+        const returnId = (created as { data: { return: { id: string } } }).data.return.id
+        await acceptReturnItems(getContainer(), {
+          return_id: returnId,
+          items: [{ item_id: itemId, restock_quantity: 1, damaged_quantity: 0 }],
+        })
+        const result = await processReturnRefund(getContainer(), { return_id: returnId })
+        expect(result.meta.status).toBe("success")
+        expect(result.meta.items_amount).toBe(perUnit)
+        expect(result.meta.amount).toBeLessThan(Number((before as any).total) - Number((before as any).shipping_total))
+      })
+
+      it("kuponlu siparişte birim iade fiyatı Medusa'nın hesabıyla aynı (indirim düşülmüş)", async () => {
+        await createPromotionsWorkflow(getContainer()).run({
+          input: {
+            promotionsData: [
+              {
+                code: "IADE15",
+                type: "standard",
+                status: "active",
+                application_method: { type: "percentage", target_type: "items", allocation: "across", value: 15, currency_code: "try" },
+              },
+            ],
+          },
+        })
+        const order = await placeGuestStubOrder(api, fx, variantId, `kupon-${Date.now()}@escay.test`, { quantity: 3, promoCode: "IADE15" })
+        const query = getContainer().resolve(ContainerRegistrationKeys.QUERY)
+        const { data: [o] } = await query.graph({
+          entity: "order",
+          fields: [
+            "id", "shipping_total", "items.id", "items.unit_price", "items.quantity", "items.total", "items.is_tax_inclusive",
+            "items.adjustments.amount", "items.tax_lines.rate", "items.detail.quantity", "items.detail.return_received_quantity",
+            "items.detail.return_dismissed_quantity", "items.refundable_total_per_unit",
+          ],
+          filters: { id: order.id },
+        })
+        const line = (o as any).items[0]
+        expect((line.adjustments || []).length).toBeGreaterThan(0)
+        const ours = paidPricePerUnit(line, new Map())
+        expect(ours).toBeLessThan(Number(line.unit_price))
+        expect(ours).toBeCloseTo(Number(line.refundable_total_per_unit), 2)
+        expect(ours * 3).toBeCloseTo(Number(line.total), 2)
       })
     })
   },

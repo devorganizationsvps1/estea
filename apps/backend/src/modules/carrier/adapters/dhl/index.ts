@@ -30,6 +30,13 @@ import {
   type ServiceArea,
 } from "./shipment"
 
+import { parsePackageProfile } from "../../package-profile"
+/** Kayıtta koli yoksa (eski gönderi) varsayılan koli profili; sabit 30×20×10 yerine env'deki koli. */
+function fallbackParcel() {
+  const p = parsePackageProfile(process.env.SHIPPING_PACKAGE_DEFAULT)
+  return { weight: Math.max(1, p.weight), length: p.length, width: p.width, height: p.height }
+}
+
 export const DHL_CODE = "dhl"
 export const DHL_NAME = "DHL eCommerce"
 
@@ -277,12 +284,7 @@ export function createDhlAdapter(deps: DhlAdapterDeps = {}): CarrierAdapter {
 
     // 1) Etiket bekleyen gönderi: barkodu şimdi almayı dene.
     if (ref && data.dhl_barcode_pending === true) {
-      const parcel = (data.dhl_parcel as { weight: number; length: number; width: number; height: number } | undefined) ?? {
-        weight: 1,
-        length: 30,
-        width: 20,
-        height: 10,
-      }
+      const parcel = (data.dhl_parcel as { weight: number; length: number; width: number; height: number } | undefined) ?? fallbackParcel()
       const r = await tryCreateBarcode(client, { referenceId: ref, parcel, content: content(str(data.order_reference) || ref) })
       if (!("pending" in r)) {
         const f = shipmentFields({ ...r.result, labelMissing: r.labelMissing }, ref)
@@ -491,12 +493,7 @@ export function createDhlAdapter(deps: DhlAdapterDeps = {}): CarrierAdapter {
       }
       const orderRef = str(originalData.order_reference) || referenceOf(originalData)
       const referenceId = toDhlReturnReference(orderRef, returnId)
-      const parcel = (originalData.dhl_parcel as { weight: number; length: number; width: number; height: number }) ?? {
-        weight: 1,
-        length: 30,
-        width: 20,
-        height: 10,
-      }
+      const parcel = (originalData.dhl_parcel as { weight: number; length: number; width: number; height: number } | undefined) ?? fallbackParcel()
       let labelUrl: string | null = null
       let existed = false
       try {

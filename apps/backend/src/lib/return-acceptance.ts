@@ -8,6 +8,7 @@ import {
   receiveItemReturnRequestWorkflow,
 } from "@medusajs/medusa/core-flows"
 import { errorText } from "./ops-events"
+import { resolveLocking } from "../modules/paytr/order-guards"
 import { isReturnRejected } from "./return-rejection"
 
 /**
@@ -86,7 +87,6 @@ export function planReturnAcceptance(
   return { receive, dismiss, items }
 }
 
-const inFlight = new Set<string>()
 
 export async function acceptReturnItems(
   container: MedusaContainer,
@@ -98,13 +98,13 @@ export async function acceptReturnItems(
     actor_id?: string | null
   }
 ): Promise<{ acceptance: ReturnAcceptanceMeta; partial: boolean }> {
-  if (inFlight.has(input.return_id)) throw new Error("Bu iade zaten işleniyor.")
-  inFlight.add(input.return_id)
-  try {
-    return await run(container, input)
-  } finally {
-    inFlight.delete(input.return_id)
-  }
+  // Süreçler arası kilit (Redis): ikinci tıklama birincinin bitmesini bekler, sonra iade
+  // artık "requested" olmadığı için run() içinde reddedilir.
+  return resolveLocking(container).execute(
+    `escay:return-accept:${input.return_id}`,
+    () => run(container, input),
+    { timeout: 60, ttl: 180 }
+  )
 }
 
 async function run(

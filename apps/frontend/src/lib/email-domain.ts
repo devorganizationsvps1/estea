@@ -11,6 +11,44 @@ import { Resolver } from "node:dns/promises"
  * doğru bir adres DNS sorunu yüzünden asla engellenmez.
  */
 
+/**
+ * DNS'te gerçekten var olan ama neredeyse kesin yazım hatası olan alan adları
+ * (ör. gmial.com kayıtlı bir alan adı, DNS kontrolü yakalamaz). Yalnız birebir eşleşme;
+ * öneri adresin doğru hâlini gösterir.
+ */
+const TYPO_DOMAINS: Record<string, string> = {
+  "gmial.com": "gmail.com",
+  "gmai.com": "gmail.com",
+  "gmal.com": "gmail.com",
+  "gamil.com": "gmail.com",
+  "gnail.com": "gmail.com",
+  "gmail.co": "gmail.com",
+  "gmail.con": "gmail.com",
+  "gmail.cm": "gmail.com",
+  "gmail.com.tr": "gmail.com",
+  "hotmial.com": "hotmail.com",
+  "hotmal.com": "hotmail.com",
+  "hotmai.com": "hotmail.com",
+  "hotmail.con": "hotmail.com",
+  "hotmail.co": "hotmail.com",
+  "hotmail.com.tr": "hotmail.com",
+  "outlok.com": "outlook.com",
+  "outlook.con": "outlook.com",
+  "yaho.com": "yahoo.com",
+  "yahoo.con": "yahoo.com",
+  "icloud.con": "icloud.com",
+  "iclod.com": "icloud.com",
+}
+
+/** Bilinen yazım hatasında doğru adres önerisi, yoksa null. */
+export function emailTypoSuggestion(email: string): string | null {
+  const at = email.trim().lastIndexOf("@")
+  if (at < 1) return null
+  const local = email.trim().slice(0, at)
+  const fixed = TYPO_DOMAINS[email.trim().slice(at + 1).toLowerCase()]
+  return fixed ? `${local}@${fixed}` : null
+}
+
 const TTL_MS = 60 * 60 * 1000
 const cache = new Map<string, { ok: boolean; at: number }>()
 

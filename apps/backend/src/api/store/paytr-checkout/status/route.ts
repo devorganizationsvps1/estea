@@ -1,5 +1,9 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
-import { findPaytrCheckout, pollPaytrCheckoutNow } from "../../../../lib/paytr-checkout"
+import {
+  findPaytrCheckout,
+  isLiveTestPaymentRecord,
+  pollPaytrCheckoutNow,
+} from "../../../../lib/paytr-checkout"
 
 /**
  * GET /store/paytr-checkout/status?oid=&cart_id=
@@ -9,6 +13,7 @@ import { findPaytrCheckout, pollPaytrCheckoutNow } from "../../../../lib/paytr-c
  *
  *   completed  sipariş oluştu
  *   processing bildirim bekleniyor ya da sipariş kurulmaya çalışılıyor (geç bildirim dahil)
+ *   not_paid   ödeme alınmadı (canlıda test kartı); sepet açık, müşteri yeniden öder
  *   attention  para alındı ama sipariş otomatik açılmayacak (elle inceleme / panelden iade)
  *   unknown    kayıt yok ya da sepet uyuşmuyor
  */
@@ -27,6 +32,10 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
   }
   if (checkout.status === "completed" && checkout.order_id) {
     res.status(200).json({ state: "completed", order_id: checkout.order_id, email: checkout.email })
+    return
+  }
+  if (isLiveTestPaymentRecord(checkout)) {
+    res.status(200).json({ state: "not_paid" })
     return
   }
   if (checkout.status === "review" || checkout.status === "refunded") {

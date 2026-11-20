@@ -284,6 +284,48 @@ export async function recordPaytrCheckoutFailure(
   })
 }
 
+/** last_error öneki: canlı modda test kartıyla gelen "başarılı" ödeme (para yok). */
+export const LIVE_TEST_PAYMENT_MARKER = "test_mode:"
+
+/** Canlı modda (PAYTR_TEST_MODE=0) test kartıyla yapılmış işlem mi? */
+export function isLiveTestPayment(testMode: unknown): boolean {
+  return (
+    String(testMode ?? "").trim() === "1" && (process.env.PAYTR_TEST_MODE ?? "").trim() === "0"
+  )
+}
+
+export function isLiveTestPaymentRecord(checkout: Pick<PaytrCheckoutRecord, "status" | "last_error">): boolean {
+  return checkout.status === "expired" && Boolean(checkout.last_error?.startsWith(LIVE_TEST_PAYMENT_MARKER))
+}
+
+/**
+ * Canlı modda test kartıyla "başarılı" ödeme: para gelmez, sipariş açılmaz. Kayıt kapanır
+ * (`expired` + işaret; durum sorgusu durur, gerçek bir success yine de işlenir), Logs'a hata
+ * düşer, sonuç sayfası müşteriye "ödeme alınamadı" der. Çağıran oid kilidini tutar.
+ */
+export async function recordLiveTestPayment(
+  container: MedusaContainer,
+  checkout: PaytrCheckoutRecord | null,
+  merchantOid: string,
+  source: "callback" | "status_query"
+): Promise<void> {
+  if (checkout && (checkout.status === "pending" || checkout.status === "expired")) {
+    await update(container, checkout.id, {
+      status: "expired",
+      last_error: `${LIVE_TEST_PAYMENT_MARKER} canlı modda test kartıyla ödeme; para alınmadı`,
+    })
+  }
+  await recordOpsEvent(container, {
+    kind: "payment.failed",
+    level: "error",
+    title: "Canlı modda test kartıyla ödeme — sipariş açılmadı",
+    detail:
+      `PayTR test_mode=1 ile başarılı bildirdi (${source}); canlıda para gelmez. ` +
+      "Müşteriye ödemenin alınamadığı gösterildi, sepet açık. PayTR panelinde mağazanın canlı modda olduğunu kontrol edin.",
+    data: { merchant_oid: merchantOid, cart_id: checkout?.cart_id ?? null, source },
+  })
+}
+
 export type SettleResult =
   | { outcome: "completed"; orderId: string }
   | { outcome: "noop" }
@@ -591,6 +633,10 @@ export async function pollPaytrCheckoutNow(
       async () => {
         const fresh = await findPaytrCheckout(container, checkout.merchant_oid)
         if (fresh?.status !== "pending") return
+        if (isLiveTestPayment(status.test_mode ? "1" : "0")) {
+          await recordLiveTestPayment(container, fresh, fresh.merchant_oid, "status_query")
+          return
+        }
         await settlePaytrCheckout(container, fresh, {
           paidKurus: Math.round(status.payment_amount * 100),
           paidCurrency: status.currency,
@@ -713,6 +759,15 @@ export async function reconcilePaytrCheckouts(
           const fresh = await findPaytrCheckout(container, row.merchant_oid)
           if (fresh?.status === "pending" || fresh?.status === "expired") {
             await markRefunded(row, status.returned_total)
+          }
+        })
+        continue
+      }
+      if (isLiveTestPayment(status.test_mode ? "1" : "0")) {
+        await withOidLock(row.merchant_oid, async () => {
+          const fresh = await findPaytrCheckout(container, row.merchant_oid)
+          if (fresh?.status === "pending") {
+            await recordLiveTestPayment(container, fresh, fresh.merchant_oid, "status_query")
           }
         })
         continue

@@ -30,6 +30,8 @@ export type PaytrStatusResult =
       payment_type: string | null
       returns: PaytrStatusReturn[]
       returned_total: number
+      /** PayTR test kartıyla yapılmış işlem (yanıtta test_mode=1). Alan yoksa false. */
+      test_mode: boolean
     }
   | { ok: false; merchant_oid: string; message: string }
 
@@ -67,6 +69,7 @@ export function parsePaytrStatus(merchantOid: string, json: Record<string, unkno
     payment_type: str(json.odeme_tipi),
     returns,
     returned_total: Math.round(returns.reduce((s, r) => s + r.amount, 0) * 100) / 100,
+    test_mode: String(json.test_mode ?? "").trim() === "1",
   }
 }
 

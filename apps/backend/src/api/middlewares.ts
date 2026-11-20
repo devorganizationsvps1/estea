@@ -50,6 +50,7 @@ import {
 import { ensureReturnReceiveLocation } from "./admin/returns/ensure-location"
 import { markPendingBankTransfersInList } from "./admin/orders/bank-transfer-list-status"
 import { filterOrdersByStatus } from "./admin/orders/status-filter"
+import { blockNativeOrderAction, NATIVE_BLOCKED } from "./admin/_native-block"
 
 const StoreOrderLookup = z
   .object({
@@ -234,16 +235,12 @@ export default defineMiddlewares({
       methods: ["GET"],
       middlewares: [filterOrdersByStatus, markPendingBankTransfersInList],
     },
-    {
-      matcher: "/admin/returns/:id/receive",
-      methods: ["POST"],
-      middlewares: [ensureReturnReceiveLocation],
-    },
-    {
-      matcher: "/admin/returns/:id/receive/confirm",
-      methods: ["POST"],
-      middlewares: [ensureReturnReceiveLocation],
-    },
+    // Medusa'nın kendi iade/iptal/değişim uçları kapalı (bkz. admin/_native-block)
+    ...NATIVE_BLOCKED.map((b) => ({
+      matcher: b.matcher,
+      methods: b.methods,
+      middlewares: [blockNativeOrderAction(b.use)],
+    })),
     {
       matcher: "/admin/returns/:id/accept",
       methods: ["POST"],

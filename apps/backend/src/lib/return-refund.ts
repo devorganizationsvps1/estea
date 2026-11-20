@@ -9,6 +9,7 @@ import { isReturnRejected } from "./return-rejection"
 import { errorText, recordOpsEvent } from "./ops-events"
 import { COMPANY } from "../emails/company"
 import { createNotificationIdempotent } from "./notify"
+import { withOrderMoneyLock } from "./order-money-lock"
 
 export const PAYTR_PROVIDER_ID = "pp_paytr_paytr"
 
@@ -60,6 +61,86 @@ function sellerPaysShipping(meta: unknown): boolean {
   return (meta as Record<string, unknown>).seller_pays_shipping === true
 }
 
+export type RefundOrderItem = {
+  id?: string
+  unit_price?: unknown
+  quantity?: unknown
+  /** Satırın müşterinin ödediği toplamı (indirim ve KDV sonrası) */
+  total?: unknown
+  refundable_total_per_unit?: unknown
+  is_tax_inclusive?: boolean | null
+  /** Satır indirimleri (kupon); satır toplamı, adetle bölünmez */
+  adjustments?: { amount?: unknown }[] | null
+  tax_lines?: { rate?: unknown }[] | null
+  detail?: {
+    quantity?: unknown
+    return_received_quantity?: unknown
+    return_dismissed_quantity?: unknown
+  } | null
+  metadata?: Record<string, unknown> | null
+}
+
+/**
+ * Bir adedin müşterinin ödediği fiyatı (kupon ürünlere dağıtılmış, KDV dahil): birim
+ * fiyat − adet başı satır indirimi (+ KDV hariç fiyatta KDV); Medusa'nın birim iade
+ * tutarıyla çapraz kontrol edilir. Liste fiyatı yalnız hiçbiri okunamazsa, belirsiz
+ * sayılarak (otomatik iade yok) kullanılır.
+ * Değişimle gelen 0 ₺ kalem, değiştirildiği kalemin ödenen fiyatını taşır (zincir izlenir).
+ */
+export function paidPricePerUnit(
+  line: RefundOrderItem | undefined,
+  byId: Map<string, RefundOrderItem>
+): number {
+  return resolvePaidPrice(line, byId).perUnit
+}
+
+function resolvePaidPrice(
+  line: RefundOrderItem | undefined,
+  byId: Map<string, RefundOrderItem>
+): { perUnit: number; certain: boolean } {
+  const seen = new Set<string>()
+  let cur = line
+  while (cur) {
+    const parentId = cur.metadata?.escay_exchange_for_item_id
+    if (typeof parentId !== "string" || !parentId || seen.has(parentId) || seen.size > 10) break
+    seen.add(parentId)
+    const parent = byId.get(parentId)
+    if (!parent) break
+    cur = parent
+  }
+  if (!cur) return { perUnit: 0, certain: false }
+
+  // 1) Değişmeyen kayıtlardan: birim fiyat − adet başı indirim (+ KDV hariç fiyatta KDV).
+  //    Medusa'nın toplam alanları iade alınınca kalan adede düşer (satır tamamen iade
+  //    edilince 0 olur), bu yüzden asıl kaynak bu hesap.
+  const qty = asNumber(cur.detail?.quantity) || asNumber(cur.quantity)
+  const unit = asNumber(cur.unit_price)
+  const hasComponents = qty > 0 && cur.unit_price != null && Array.isArray(cur.tax_lines) && Array.isArray(cur.adjustments)
+  let fromComponents: number | null = null
+  if (hasComponents) {
+    const discount = (cur.adjustments || []).reduce((s, a) => s + asNumber(a?.amount), 0) / qty
+    const rate = (cur.tax_lines || []).reduce((s, t) => s + asNumber(t?.rate), 0)
+    const net = Math.max(0, unit - discount)
+    fromComponents = cur.is_tax_inclusive === false ? net * (1 + rate / 100) : net
+  }
+
+  // 2) Medusa'nın hesabı (iade edilmemiş adet varken doğru): çapraz kontrol / yedek.
+  const rpu = asNumber(cur.refundable_total_per_unit)
+  const openQty =
+    qty - asNumber(cur.detail?.return_received_quantity) - asNumber(cur.detail?.return_dismissed_quantity)
+  const total = asNumber(cur.total)
+  const fromMedusa = rpu > 0 ? rpu : openQty > 0 && total > 0 ? total / openQty : null
+
+  if (fromComponents !== null) {
+    // İki hesap farklıysa (beklenmeyen indirim/KDV biçimi) otomatik iade yapılmaz.
+    const agrees = fromMedusa === null || Math.abs(fromMedusa - fromComponents) <= 0.01
+    return { perUnit: fromComponents, certain: agrees }
+  }
+  if (fromMedusa !== null) return { perUnit: fromMedusa, certain: true }
+  // Ücretsiz kalem (0 ₺) kesin; liste fiyatı ise indirim/KDV bilinmeden tahmin
+  return { perUnit: unit, certain: unit === 0 }
+}
+
 /**
  * İade tutarı: alınan kalemler + (sebep metadata.seller_pays_shipping ise) sipariş kargosu.
  * Kargo yalnızca bir kez (önceki başarılı iadede dahil edilmediyse).
@@ -72,11 +153,7 @@ export function calculateReturnRefundAmount(input: {
     received_quantity?: number | null
     reason_id?: string | null
   }[]
-  orderItems: {
-    id?: string
-    unit_price?: unknown
-    refundable_total_per_unit?: unknown
-  }[]
+  orderItems: RefundOrderItem[]
   reasonsById: Record<string, { metadata?: unknown } | undefined>
   shippingTotal: number
   shippingAlreadyRefunded: boolean
@@ -87,6 +164,8 @@ export function calculateReturnRefundAmount(input: {
   shippingAmount: number
   shippingIncluded: boolean
   total: number
+  /** Ödenen fiyatı okunamayan kalemler (liste fiyatı tahmini) — otomatik iade yapılmaz */
+  uncertainItems: string[]
 } {
   const byId = new Map(
     input.orderItems.filter((i) => i.id).map((i) => [i.id as string, i])
@@ -94,6 +173,7 @@ export function calculateReturnRefundAmount(input: {
 
   let itemsAmount = 0
   let includeShipping = false
+  const uncertainItems: string[] = []
 
   for (const ri of input.returnItems) {
     const received = asNumber(ri.received_quantity)
@@ -108,9 +188,9 @@ export function calculateReturnRefundAmount(input: {
     if (qty <= 0 || !ri.item_id) continue
 
     const line = byId.get(ri.item_id)
-    const perUnit =
-      asNumber(line?.refundable_total_per_unit) || asNumber(line?.unit_price)
-    itemsAmount += perUnit * qty
+    const price = resolvePaidPrice(line, byId)
+    if (!line || !price.certain) uncertainItems.push(ri.item_id)
+    itemsAmount += price.perUnit * qty
 
     const reason = ri.reason_id ? input.reasonsById[ri.reason_id] : undefined
     if (sellerPaysShipping(reason?.metadata)) {
@@ -133,6 +213,7 @@ export function calculateReturnRefundAmount(input: {
     shippingAmount,
     shippingIncluded,
     total: roundMoney(itemsAmount + shippingAmount),
+    uncertainItems,
   }
 }
 
@@ -213,7 +294,31 @@ async function alertRefundFailed(
  * Return received sonrası PayTR refund. Idempotent: paytr_refund.status=success ise skip.
  * Fail'de return status değişmez; metadata.paytr_refund=failed (admin retry).
  */
+/**
+ * İade edilen kalemlerin parasını PayTR'den geri öder. Aynı sipariş için kilit altında
+ * çalışır (çift tıklama, iki sekme, eşzamanlı iki iade); kilit içinde kayıt taze okunur.
+ */
 export async function processReturnRefund(
+  scope: MedusaContainer,
+  input: { return_id: string; order_id?: string }
+): Promise<ReturnRefundResult> {
+  let orderId = input.order_id
+  if (!orderId) {
+    const query = scope.resolve(ContainerRegistrationKeys.QUERY)
+    const { data } = await query.graph({
+      entity: "return",
+      fields: ["id", "order_id"],
+      filters: { id: input.return_id },
+    })
+    orderId = (data?.[0] as { order_id?: string } | undefined)?.order_id
+  }
+  if (!orderId) return processReturnRefundUnlocked(scope, input)
+  return withOrderMoneyLock(scope, orderId, () =>
+    processReturnRefundUnlocked(scope, { ...input, order_id: orderId })
+  )
+}
+
+async function processReturnRefundUnlocked(
   scope: MedusaContainer,
   input: { return_id: string; order_id?: string }
 ): Promise<ReturnRefundResult> {
@@ -319,9 +424,20 @@ export async function processReturnRefund(
       "id",
       "shipping_total",
       "currency_code",
-      "summary.pending_difference",
       "items.id",
       "items.unit_price",
+      "items.quantity",
+      "items.total",
+      "items.metadata",
+      "items.is_tax_inclusive",
+      "items.adjustments.amount",
+      "items.tax_lines.rate",
+      // detail.* çalışmaz: adet ve iade alanları tek tek istenmeli, yoksa quantity/total boş gelir
+      "items.detail.quantity",
+      "items.detail.return_requested_quantity",
+      "items.detail.return_received_quantity",
+      "items.detail.return_dismissed_quantity",
+      "items.detail.fulfilled_quantity",
       "items.refundable_total_per_unit",
       "payment_collections.id",
       "payment_collections.payments.id",
@@ -340,12 +456,7 @@ export async function processReturnRefund(
     | {
         id: string
         shipping_total?: unknown
-        summary?: { pending_difference?: unknown } | null
-        items?: {
-          id?: string
-          unit_price?: unknown
-          refundable_total_per_unit?: unknown
-        }[]
+        items?: RefundOrderItem[]
         payment_collections?: {
           payments?: {
             id?: string
@@ -412,11 +523,24 @@ export async function processReturnRefund(
         ?.refund_shipping === true,
   })
 
-  // Receive sonrası Medusa pending_difference genelde kalem kredisini taşır (kargo hariç).
-  const pending = asNumber(order.summary?.pending_difference)
-  const pendingItemsOwed = pending < 0 ? roundMoney(Math.abs(pending)) : 0
-  const itemsAmount =
-    pendingItemsOwed > 0 ? pendingItemsOwed : calc.itemsAmount
+  // Tutar yalnız bu iadenin kalemlerinden: sipariş geneli `pending_difference` kullanılmaz
+  // (Mareen'de kısmi iadede tüm siparişi iade ettirdi; değişim kredisi de ona eklenir).
+  const itemsAmount = calc.itemsAmount
+  if (calc.uncertainItems.length) {
+    const meta: ReturnRefundMeta = {
+      status: "failed",
+      amount: calc.total,
+      items_amount: itemsAmount,
+      shipping_amount: calc.shippingAmount,
+      shipping_included: calc.shippingIncluded,
+      error: `Ödenen fiyat okunamadı (${calc.uncertainItems.join(", ")}); tutar elle kontrol edilmeli`,
+      manual_required: true,
+      at: new Date().toISOString(),
+    }
+    await markReturnRefund(scope, returnId, ret.metadata, meta)
+    await alertRefundFailed(scope, { returnId, orderId, meta })
+    return { ok: false, meta }
+  }
   const shippingAmount = calc.shippingAmount
   const shippingIncluded = calc.shippingIncluded
   const total = roundMoney(itemsAmount + shippingAmount)

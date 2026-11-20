@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
-import { fontVariables } from '@estea/ui/fonts'
+import '@estea/ui/fonts'
 import { DevLanLinks } from '@/components/layout/DevLanLinks'
 import './globals.css'
 
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="tr" className={fontVariables}>
+    <html lang="tr">
       <body>
         {children}
         {process.env.NODE_ENV === 'development' && <DevLanLinks />}

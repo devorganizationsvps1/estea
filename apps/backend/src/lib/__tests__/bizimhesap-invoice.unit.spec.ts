@@ -315,6 +315,51 @@ describe("issueSalesInvoiceForOrder", () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it("mock kayıt sonradan gerçek bağlantıda gönderilir; gerçek kayıt tekrar gönderilmez", async () => {
+    const order = baseOrder({ metadata: { bizimhesap_invoice: { status: "created", mode: "mock", guid: "mock-100001" } } })
+    const { scope } = makeScope(order)
+    const fetchMock = mockFetch(okResponse)
+    await issueSalesInvoiceForOrder(scope, "order_1")
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(invoiceOf(order)).toMatchObject({ status: "created", mode: "live", guid: "G1" })
+    await issueSalesInvoiceForOrder(scope, "order_1")
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("mock moddayken mock kayıt tekrar yazılmaz", async () => {
+    const order = baseOrder({ metadata: { bizimhesap_invoice: { status: "created", mode: "mock", guid: "mock-100001" } } })
+    const { scope } = makeScope(order, "")
+    const res = await issueSalesInvoiceForOrder(scope, "order_1")
+    expect(res.skipped).toBe(true)
+  })
+
+  it("parası tamamen iade edilmiş sipariş faturalanmaz", async () => {
+    const order = baseOrder({
+      payment_collections: [{ payments: [{ captures: [{ amount: 184.9 }], refunds: [{ amount: 184.9 }] }] }],
+    })
+    const { scope } = makeScope(order)
+    const fetchMock = mockFetch(okResponse)
+    const res = await issueSalesInvoiceForOrder(scope, "order_1")
+    expect(res.skipped).toBe(true)
+    expect(invoiceOf(order)).toMatchObject({ status: "skipped", note: "refunded" })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it("açıklamadaki tarih ödemenin günü", async () => {
+    const order = baseOrder({
+      payment_collections: [{ payments: [{ captures: [{ amount: 184.9, created_at: "2026-11-02T22:30:00Z" }], refunds: [] }] }],
+    })
+    const { scope } = makeScope(order)
+    let body = ""
+    mockFetch((...args: unknown[]) => {
+      body = String((args[1] as { body?: unknown })?.body ?? "")
+      return okResponse()
+    })
+    await issueSalesInvoiceForOrder(scope, "order_1")
+    // 22:30 UTC = İstanbul'da 3 Kasım
+    expect(body).toContain("2026-11-03")
+  })
+
   it("iptal sipariş gönderilmez; mevcut metadata korunur", async () => {
     const order = baseOrder({ status: "canceled", metadata: { contract: "x" } })
     const { scope } = makeScope(order)

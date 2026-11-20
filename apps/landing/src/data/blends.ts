@@ -62,7 +62,7 @@ export const brew = {
     'İnce belli bardağa önce dem, sonra sıcak su. Tavşan kanı rengi tuttuysa hazır.',
   ],
   note: 'Açılan paketi ağzı kapalı, serin ve kokusuz bir yerde saklayın; çay yaprağı çevresindeki kokuyu çeker.',
-  link: { label: 'Demleme yazısını okuyun', href: 'https://esteacay.com/elementor-3218/' },
+  link: { label: 'Demleme yazısını okuyun', href: '/blog/siyah-cay-demlemenin-puf-noktalari' },
 }
 
 export const blends: Blend[] = [

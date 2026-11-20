@@ -90,12 +90,12 @@ describe("resolvePackage — ürün ağırlığı olmayan katalog için", () => 
     expect(parcel.totalUnits).toBe(3)
   })
 
-  it("varsayılan kolide yükseklik adetle istiflenir, 45 cm'de (9 desi) durur", () => {
+  it("varsayılan koli adetle büyümez: 1, 2, 3 ve 10 adet hep 3 desi", () => {
     for (const [quantity, desi] of [
       [1, 3],
-      [2, 6],
-      [3, 9],
-      [10, 9],
+      [2, 3],
+      [3, 3],
+      [10, 3],
     ] as const) {
       const p = resolvePackage([{ quantity }])
       expect((p.length * p.width * p.height) / 3000).toBe(desi)
@@ -103,7 +103,7 @@ describe("resolvePackage — ürün ağırlığı olmayan katalog için", () => 
   })
 
   it("yükseklik istiflemeyle büyür ama maxHeight'ı aşmaz (istifli profil)", () => {
-    const stacked = { weight: 0.5, length: 25, width: 20, height: 5, maxHeight: 40 }
+    const stacked = { weight: 0.5, length: 25, width: 20, height: 5, maxHeight: 40, stack: true }
     // 5cm × 4 adet = 20cm
     expect(resolvePackage([{ quantity: 4 }], stacked).height).toBe(20)
     // 5cm × 20 adet = 100cm → 40cm'e sınırlanır
@@ -147,15 +147,15 @@ describe("resolvePackage — ürün ağırlığı olmayan katalog için", () => 
   })
 
   it("özel profille çalışır", () => {
-    const parcel = resolvePackage([{ quantity: 2 }], {
-      weight: 1,
-      length: 40,
-      width: 30,
-      height: 10,
-      maxHeight: 15,
-    })
+    const profile = { weight: 1, length: 40, width: 30, height: 10, maxHeight: 15 }
+    expect(resolvePackage([{ quantity: 2 }], profile)).toMatchObject({ weight: 2, length: 40, width: 30, height: 10 })
+    expect(resolvePackage([{ quantity: 2 }], { ...profile, stack: true })).toMatchObject({ height: 15 })
+  })
 
-    expect(parcel).toMatchObject({ weight: 2, length: 40, width: 30, height: 15 })
+  it("env'deki eski profil (stack yok, maxHeight 45) de adetle büyümez", () => {
+    const profile = parsePackageProfile('{"weight":0.5,"length":30,"width":20,"height":15,"maxHeight":45}')
+    expect(resolvePackage([{ quantity: 3 }], profile).height).toBe(15)
+    expect(parsePackageProfile('{"height":5,"maxHeight":40,"stack":true}').stack).toBe(true)
   })
 
   it("boş kalem listesinde bile geçerli bir paket üretir", () => {

@@ -14,7 +14,7 @@ import {
   validateCheckoutAddress,
   type CheckoutAddressInput,
 } from "./checkout-address"
-import { emailDomainAcceptsMail } from "./email-domain"
+import { emailDomainAcceptsMail, emailTypoSuggestion } from "./email-domain"
 import { cartLineImage, variantLabel } from "@/components/cart/cart-utils"
 import {
   CART_FIELDS,
@@ -102,6 +102,14 @@ export async function saveCheckoutContactAction(input: {
     const email = input.email.trim()
     if (!email || !email.includes("@")) {
       return { ok: false, message: "Geçerli bir email girin." }
+    }
+    const suggestion = emailTypoSuggestion(email)
+    if (suggestion) {
+      return {
+        ok: false,
+        code: "email_domain",
+        message: `E-posta adresinde yazım hatası olabilir. Bunu mu demek istediniz: ${suggestion}`,
+      }
     }
     if (!(await emailDomainAcceptsMail(email))) {
       const domain = email.split("@").pop()
@@ -559,6 +567,8 @@ export type PaytrCheckoutPoll =
   | { state: "processing" }
   /** Para alındı ama sipariş otomatik açılmayacak (elle inceleme / panelden iade) */
   | { state: "attention" }
+  /** Ödeme alınmadı (canlı mağazada test kartı); sepet açık, müşteri yeniden öder */
+  | { state: "not_paid" }
   | { state: "unknown" }
 
 /**
@@ -572,7 +582,7 @@ export async function pollPaytrCheckoutAction(oid: string): Promise<PaytrCheckou
   if (!oid || !cartId) return { state: "unknown" }
   try {
     const res = await sdk.client.fetch<{
-      state: "completed" | "processing" | "attention" | "unknown"
+      state: "completed" | "processing" | "attention" | "not_paid" | "unknown"
       order_id?: string
       email?: string | null
     }>("/store/paytr-checkout/status", {
@@ -587,6 +597,12 @@ export async function pollPaytrCheckoutAction(oid: string): Promise<PaytrCheckou
       return { state: "completed", orderId: res.order_id }
     }
     if (res.state === "attention") return { state: "attention" }
+    if (res.state === "not_paid") {
+      // Sepet tamamlanmadı: bırakılmışsa geri bağlanır ki müşteri aynı sepetle tekrar ödesin.
+      if (!(await getCartId())) await setCartIdCookie(cartId)
+      jar.delete(PAYTR_PAID_CART_COOKIE)
+      return { state: "not_paid" }
+    }
     return { state: res.state === "processing" ? "processing" : "unknown" }
   } catch {
     // Bağlantı hatası: sonuç bilinmiyor, sayfa sormaya devam eder.

@@ -1,8 +1,13 @@
 /*
  * Esçay design tokens shared by every app.
  * Usage (after `@import "tailwindcss";`): @import "@estea/ui/theme.css";
- * Font variables come from `@estea/ui/fonts` (next/font).
+ * Font dosyaları `@estea/ui/fonts` (Fontsource) ile yüklenir; aile adları aşağıda.
  */
+
+:root {
+  --font-archivo: 'Archivo Variable';
+  --font-bricolage: 'Bricolage Grotesque Variable';
+}
 
 @theme {
   --color-brand: #b43317;

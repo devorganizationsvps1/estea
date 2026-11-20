@@ -493,11 +493,9 @@ async function runScenario(
   if (gotItems <= 0) {
     throw new Error(`[${label}] items_amount missing: ${JSON.stringify(pr)}`)
   }
-  // Item refund should match line (allow pending_difference path)
-  if (Math.abs(gotItems - expectedItems) > 0.02 && gotItems !== expectedItems) {
-    logger.warn(
-      `[rma-smoke][${label}] items_amount ${gotItems} vs unit ${expectedItems} (pending_difference path OK if close)`
-    )
+  // Kalem iadesi yalnız iade edilen adetlerin ödenen fiyatı olmalı (fazla iade = hata)
+  if (Math.abs(gotItems - expectedItems) > 0.02) {
+    throw new Error(`[${label}] items_amount ${gotItems} ≠ beklenen ${expectedItems}`)
   }
   if (expectShippingIncluded) {
     if (gotShip <= 0) {

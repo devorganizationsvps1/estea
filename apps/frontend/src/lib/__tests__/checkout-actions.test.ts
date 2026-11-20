@@ -44,7 +44,7 @@ vi.mock("next/headers", () => ({
   headers: async () => ({ get: (k: string) => h.reqHeaders.get(k) ?? null }),
 }))
 vi.mock("next/navigation", () => ({ redirect: h.redirect }))
-vi.mock("../email-domain", () => ({ emailDomainAcceptsMail: h.emailOk }))
+vi.mock("../email-domain", () => ({ emailDomainAcceptsMail: h.emailOk, emailTypoSuggestion: () => null }))
 vi.mock("../medusa", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../medusa")>()),
   sdk: h.sdk,

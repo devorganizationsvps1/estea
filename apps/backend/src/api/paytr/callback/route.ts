@@ -29,6 +29,8 @@ import {
 import {
   ensureCheckoutForSession,
   findPaytrCheckout,
+  isLiveTestPayment,
+  recordLiveTestPayment,
   recordPaytrCheckoutFailure,
   settlePaytrCheckout,
 } from "../../../lib/paytr-checkout"
@@ -121,11 +123,24 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
   }
 
   // Canlı modda (PAYTR_TEST_MODE=0) test kartıyla yapılmış "başarılı" ödeme para getirmez:
-  // sipariş açılmaz. "OK" dönülür ki PayTR aynı bildirimi tekrar göndermesin.
-  if (status === "success" && String(body.test_mode ?? "").trim() === "1" && (process.env.PAYTR_TEST_MODE ?? "").trim() === "0") {
+  // sipariş açılmaz; kayıt kapanır, Logs'a olay düşer, sonuç sayfası "ödeme alınamadı" der.
+  // "OK" dönülür ki PayTR aynı bildirimi tekrar göndermesin.
+  if (status === "success" && isLiveTestPayment(body.test_mode)) {
     logger?.error(
       `[paytr/callback] Canlı modda test_mode=1 başarılı bildirim — sipariş açılmadı (merchant_oid=${merchantOid})`
     )
+    try {
+      await resolveLocking(req.scope).execute(
+        paytrCallbackLockKey(merchantOid),
+        async () => {
+          const checkout = await findPaytrCheckout(req.scope, merchantOid)
+          await recordLiveTestPayment(req.scope, checkout, merchantOid, "callback")
+        },
+        { timeout: 30, ttl: 60 }
+      )
+    } catch (err) {
+      logger?.error(`[paytr/callback] test_mode kaydı yazılamadı — oid=${merchantOid}: ${formatUnknownError(err)}`)
+    }
     res.status(200).send("OK")
     return
   }

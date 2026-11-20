@@ -26,11 +26,14 @@ jest.mock("../../../../modules/paytr/order-guards", () => ({
 jest.mock("../../../../lib/paytr-checkout", () => ({
   ensureCheckoutForSession: jest.fn(),
   findPaytrCheckout: jest.fn(async () => null),
+  isLiveTestPayment: jest.requireActual("../../../../lib/paytr-checkout").isLiveTestPayment,
+  recordLiveTestPayment: jest.fn(async () => undefined),
   recordPaytrCheckoutFailure: jest.fn(),
   settlePaytrCheckout: jest.fn(),
 }))
 
 import { sendPaytrCriticalAlert } from "../../../../lib/paytr-compensate"
+import { recordLiveTestPayment, settlePaytrCheckout } from "../../../../lib/paytr-checkout"
 import { POST } from "../route"
 
 async function callback(status: string, extra: Record<string, string> = {}) {
@@ -74,6 +77,8 @@ describe("PayTR callback: ödeme oturumu bulunamadı", () => {
     try {
       const res = await callback("success", { test_mode: "1" })
       expect(sendPaytrCriticalAlert).not.toHaveBeenCalled()
+      expect(settlePaytrCheckout).not.toHaveBeenCalled()
+      expect(recordLiveTestPayment).toHaveBeenCalledWith(expect.anything(), null, "Mpayses123abc", "callback")
       expect(res.send).toHaveBeenCalledWith("OK")
     } finally {
       process.env.PAYTR_TEST_MODE = prev

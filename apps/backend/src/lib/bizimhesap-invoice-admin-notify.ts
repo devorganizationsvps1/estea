@@ -42,6 +42,39 @@ async function readOrder(scope: MedusaContainer, orderId: string) {
   return { order, displayId }
 }
 
+/** İade kabulünde hasarlı ayrılan kalemler (return-acceptance → metadata.escay_acceptance). */
+async function readDamagedLines(
+  scope: MedusaContainer,
+  orderId: string,
+  returnId: string
+): Promise<{ title: string; quantity: number }[]> {
+  try {
+    const query = scope.resolve(ContainerRegistrationKeys.QUERY)
+    const { data: returns } = await query.graph({
+      entity: "return",
+      fields: ["id", "metadata"],
+      filters: { id: returnId },
+    })
+    const items = ((returns?.[0] as { metadata?: Record<string, unknown> | null } | undefined)?.metadata
+      ?.escay_acceptance as { items?: { item_id: string; damaged?: number }[] } | undefined)?.items
+    const damaged = (items || []).filter((i) => Number(i.damaged) > 0)
+    if (!damaged.length) return []
+    const { data: orders } = await query.graph({
+      entity: "order",
+      fields: ["id", "items.id", "items.title", "items.variant_title"],
+      filters: { id: orderId },
+    })
+    const lines = ((orders?.[0] as { items?: { id: string; title?: string; variant_title?: string | null }[] } | undefined)?.items) || []
+    return damaged.map((d) => {
+      const line = lines.find((l) => l.id === d.item_id)
+      const title = [line?.title, line?.variant_title].filter(Boolean).join(" ") || d.item_id
+      return { title, quantity: Number(d.damaged) }
+    })
+  } catch {
+    return []
+  }
+}
+
 export async function notifyBizimhesapInvoiceProblem(
   scope: MedusaContainer,
   orderId: string,
@@ -130,10 +163,18 @@ export async function notifyManualRefundInvoice(
   input: { order_id: string; return_id: string; amount: number }
 ): Promise<void> {
   const { order, displayId } = await readOrder(scope, input.order_id)
+  const damaged = await readDamagedLines(scope, input.order_id, input.return_id)
   const amount = input.amount.toFixed(2)
   const subject = `[Es Çay] İade faturası elle kesilecek — #${displayId}`
   const instruction =
-    "Para iadesi tamamlandı. BizimHesap API'si iade faturası açamıyor; iade faturasını BizimHesap panelinden kesin."
+    "Para iadesi PayTR'ye iletildi. BizimHesap API'si iade faturası açamıyor; iade faturasını BizimHesap panelinden kesin."
+  // BizimHesap stok sahibi (K15): iade faturasıyla stoğa giren adet bir sonraki eşitlemede
+  // satışa açılır. Hasarlı adetler stoğa girmemeli.
+  const damagedText = damaged.length
+    ? `Hasarlı kabul edilen ürünler (iade faturasında stoğa SOKMAYIN, fire/hasar olarak işleyin): ${damaged
+        .map((d) => `${d.title} × ${d.quantity}`)
+        .join(", ")}`
+    : ""
   const html = emailLayout(`
     <h1 style="margin:0 0 12px;font-size:20px;color:${EMAIL_STYLES.brandColor};">İade faturası elle kesilecek</h1>
     <p style="margin:0 0 16px;color:${EMAIL_STYLES.mutedColor};">
@@ -142,13 +183,14 @@ export async function notifyManualRefundInvoice(
     <p style="margin:0 0 8px;"><strong>Tutar:</strong> ${escapeHtml(amount)} TL</p>
     <p style="margin:0 0 8px;"><strong>Return ID:</strong> ${escapeHtml(input.return_id)}</p>
     <p style="margin:0;"><strong>Müşteri:</strong> ${escapeHtml(order?.email || "—")}</p>
+    ${damagedText ? `<p style="margin:16px 0 0;color:${EMAIL_STYLES.brandColor};"><strong>${escapeHtml(damagedText)}</strong></p>` : ""}
   `)
   const text = `İade faturası elle kesilecek — #${displayId}
 ${instruction}
 Tutar: ${amount} TL
 Return: ${input.return_id}
 Müşteri: ${order?.email || "—"}
-`
+${damagedText ? `\n${damagedText}\n` : ""}`
 
   await createNotificationIdempotent(scope.resolve(Modules.NOTIFICATION), {
     to: alertInbox(),

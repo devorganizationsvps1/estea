@@ -4,6 +4,7 @@ import { Modules } from "@medusajs/framework/utils"
 import { processFailedEmails } from "../../src/lib/failed-emails"
 import { OPS_EVENT_MODULE } from "../../src/modules/ops-event"
 import { placeGuestStubOrder } from "./helpers/place-order"
+import { fulfillOrderItems } from "./helpers/fulfill-order"
 import {
   createPricedProducts,
   seedStorefrontFixture,
@@ -132,6 +133,41 @@ medusaIntegrationTestRunner({
         // Çözülmüş mail bir daha gönderilmez.
         await expect(processFailedEmails(container)).resolves.toMatchObject({ retried: 0 })
         expect(smtp.state.accepted).toBe(1)
+      })
+
+      it("kargoya verildi maili de kesinti sonrası gönderiden yeniden üretilir", async () => {
+        const container = getContainer()
+        const fx = await seedStorefrontFixture(container)
+        const [product] = await createPricedProducts(container, fx, 1)
+        const order = await placeGuestStubOrder(api, fx, product.variants[0].id, "kargo@example.com")
+        const fulfillment = (await fulfillOrderItems(container, {
+          orderId: order.id,
+          itemId: order.items[0].id,
+          locationId: fx.stockLocationId,
+          shippingOptionId: fx.shippingOptionId,
+        })) as { id: string }
+
+        const notification = container.resolve(Modules.NOTIFICATION)
+        smtp.state.rejecting = true
+        await expect(
+          notification.createNotifications({
+            to: "kargo@example.com",
+            channel: "email",
+            template: "order-shipped",
+            content: { subject: "Kargo", text: "x" },
+            resource_id: fulfillment.id,
+            resource_type: "fulfillment",
+            idempotency_key: `order-shipped:${fulfillment.id}`,
+          })
+        ).rejects.toThrow("550")
+
+        smtp.state.rejecting = false
+        const before = smtp.state.accepted
+        const result = await processFailedEmails(container)
+        expect(result.recovered).toBeGreaterThanOrEqual(1)
+        expect(smtp.state.accepted).toBe(before + 1)
+        await processFailedEmails(container)
+        expect(smtp.state.accepted).toBe(before + 1)
       })
     })
   },

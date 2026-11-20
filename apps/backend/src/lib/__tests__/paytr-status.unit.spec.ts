@@ -19,6 +19,13 @@ describe("paytr-status", () => {
     expect(s.payment_total).toBe(3130.54)
   })
 
+  it("test_mode=1 işaretlenir, alan yoksa false", () => {
+    const t = parsePaytrStatus("T", { status: "success", payment_amount: "10", test_mode: "1" })
+    expect(t.ok && t.test_mode).toBe(true)
+    const l = parsePaytrStatus("L", { status: "success", payment_amount: "10" })
+    expect(l.ok && l.test_mode).toBe(false)
+  })
+
   it("hata yanıtı", () => {
     expect(parsePaytrStatus("X", { status: "error", err_no: "005", err_msg: "bulunamadi" })).toMatchObject({
       ok: false,

@@ -155,6 +155,7 @@ medusaIntegrationTestRunner({
         payment_type: "card",
         returns: [],
         returned_total: returned,
+        test_mode: false,
       })
       const unpaidStatus: PaytrStatusResult = { ok: false, merchant_oid: "x", message: "004" }
 
@@ -358,6 +359,37 @@ medusaIntegrationTestRunner({
         const orders = await ordersForCart(cartId)
         expect(orders).toHaveLength(1)
         expect(await isCaptured(orders[0])).toBe(true)
+      })
+
+      it("canlı modda test kartı: sipariş açılmaz, kayıt kapanır, sonuç ucu not_paid, sorgu da açmaz", async () => {
+        const prev = process.env.PAYTR_TEST_MODE
+        process.env.PAYTR_TEST_MODE = "0"
+        try {
+          const cartId = await openCart(`tm-${Date.now()}@escay.test`)
+          const { oid, kurus } = await openIframe(cartId)
+          await callback(oid, "success", kurus, { test_mode: "1" })
+          expect(await ordersForCart(cartId)).toHaveLength(0)
+          const r = await row(oid)
+          expect(r.status).toBe("expired")
+          expect(r.last_error).toMatch(/^test_mode:/)
+          const st = await api.get(`/store/paytr-checkout/status?oid=${oid}&cart_id=${cartId}`, fx.storeHeaders)
+          expect(st.data).toEqual({ state: "not_paid" })
+          const ops = getContainer().resolve(OPS_EVENT_MODULE) as any
+          const events = await ops.listOpsEvents({ kind: "payment.failed" }, { take: 50 })
+          expect(events.some((e: any) => e.data?.merchant_oid === oid)).toBe(true)
+
+          // Bildirim gelmeden durum sorgusu test işlemi gösterirse de sipariş açılmaz
+          const cart2 = await openCart(`tmq-${Date.now()}@escay.test`)
+          const q = await openIframe(cart2)
+          await reconcilePaytrCheckouts(getContainer(), {
+            now: new Date(Date.now() + 10 * 60 * 1000),
+            query: async () => ({ ...paidStatus(q.kurus), test_mode: true }),
+          })
+          expect(await ordersForCart(cart2)).toHaveLength(0)
+          expect((await row(q.oid)).status).toBe("expired")
+        } finally {
+          process.env.PAYTR_TEST_MODE = prev
+        }
       })
 
       it("tutar tutmazsa sipariş açılmaz", async () => {

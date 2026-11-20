@@ -1,3 +1,4 @@
+import { resolveLocking } from "../modules/paytr/order-guards"
 import { MedusaContainer } from "@medusajs/framework/types"
 import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils"
 import { createOrderFulfillmentWorkflow } from "@medusajs/medusa/core-flows"
@@ -54,7 +55,24 @@ function asQty(value: unknown): number {
  * Atlanır: SHIPPING_AUTO_FULFILL kapalı (manual modda varsayılan), sipariş iptal,
  * kalan adet 0 veya aktif bir gönderi zaten var.
  */
+/**
+ * Aynı sipariş için süreçler arası sıralı (Redis kilidi): admin "yeniden dene" ile ödeme
+ * aboneliği / yeniden deneme işi aynı anda çalışırsa ikincisi birincinin açtığı gönderiyi
+ * görür, aynı DHL referansına ikinci Medusa gönderisi açılmaz.
+ */
 export async function autoFulfillPaidOrder(
+  container: MedusaContainer,
+  orderId: string,
+  opts: Parameters<typeof autoFulfillPaidOrderUnlocked>[2] = {}
+): ReturnType<typeof autoFulfillPaidOrderUnlocked> {
+  return resolveLocking(container).execute(
+    `escay:auto-fulfill:${orderId}`,
+    () => autoFulfillPaidOrderUnlocked(container, orderId, opts),
+    { timeout: 120, ttl: 300 }
+  )
+}
+
+async function autoFulfillPaidOrderUnlocked(
   container: MedusaContainer,
   orderId: string,
   opts: {

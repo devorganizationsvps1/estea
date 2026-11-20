@@ -5,6 +5,8 @@ import {
   NotificationStatus,
 } from "@medusajs/framework/utils"
 import { sendOrderConfirmationEmail } from "./order-confirmation-email"
+import { sendShippingStatusEmail } from "./shipping-status-email"
+import { sendReturnCodeToCustomer } from "./return-code"
 import { dailyTitle, errorText, recordOpsEvent } from "./ops-events"
 
 const LOOKBACK_MS = 24 * 60 * 60 * 1000
@@ -49,18 +51,76 @@ export function findUnresolvedEmails(rows: NotificationRow[]): FailedEmail[] {
   return unresolved
 }
 
+/**
+ * Kayıtlı veriden yeniden üretilebilen mailler: sipariş onayı (sipariş), kargoya verildi /
+ * teslim edildi (gönderi), iade kodu (iade metadata'sındaki kod). Mareen'de giden maillerin
+ * çoğu kargo mailleriydi; limit dolduğunda kaybolmasınlar.
+ */
+const RETRYABLE_TEMPLATES = new Set([
+  ORDER_CONFIRMATION_TEMPLATE,
+  "order-shipped",
+  "order-delivered",
+  "return-code-customer",
+])
+
 function shouldRetry(email: FailedEmail): email is FailedEmail & { resourceId: string } {
   return (
-    email.template === ORDER_CONFIRMATION_TEMPLATE &&
+    RETRYABLE_TEMPLATES.has(email.template) &&
     Boolean(email.resourceId) &&
     email.attempts < MAX_ORDER_CONFIRMATION_ATTEMPTS
   )
 }
 
+/** Tekrar gönderir; mail gitti mi döner. null: kayıt artık yok / gönderilmemeli. */
+async function resend(
+  container: MedusaContainer,
+  email: FailedEmail & { resourceId: string }
+): Promise<boolean | null> {
+  if (email.template === ORDER_CONFIRMATION_TEMPLATE) {
+    const result = await sendOrderConfirmationEmail(container, email.resourceId)
+    if (result.skipped === "canceled") return null
+    return result.sent
+  }
+  const query = container.resolve(ContainerRegistrationKeys.QUERY)
+  if (email.template === "order-shipped" || email.template === "order-delivered") {
+    const { data } = await query.graph({
+      entity: "fulfillment",
+      fields: ["id", "canceled_at", "order.id"],
+      filters: { id: email.resourceId },
+    })
+    const row = data?.[0] as { canceled_at?: unknown; order?: { id?: string } | null } | undefined
+    if (!row?.order?.id || row.canceled_at) return null
+    await sendShippingStatusEmail(container, {
+      orderId: row.order.id,
+      fulfillmentId: email.resourceId,
+      kind: email.template === "order-shipped" ? "shipped" : "delivered",
+    })
+    return true
+  }
+  if (email.template === "return-code-customer") {
+    const { data } = await query.graph({
+      entity: "return",
+      fields: ["id", "order_id", "status", "metadata"],
+      filters: { id: email.resourceId },
+    })
+    const ret = data?.[0] as { order_id?: string; status?: string; metadata?: Record<string, unknown> | null } | undefined
+    const code = typeof ret?.metadata?.return_code === "string" ? ret.metadata.return_code : ""
+    if (!ret || !code || ret.status === "canceled" || ret.status === "received") return null
+    await sendReturnCodeToCustomer(container, {
+      returnId: email.resourceId,
+      orderId: ret.order_id,
+      code,
+      source: (ret.metadata?.return_code_source as never) || "carrier",
+    })
+    return true
+  }
+  return null
+}
+
 /**
- * Gönderilemeyen mailleri ele alır. Medusa mail içeriğini saklamadığından yalnız
- * sipariş onayı (siparişten yeniden üretilebilir) tekrar denenir; diğerleri için
- * günde bir uyarı düşer. Şifre sıfırlama gibi süreli linkler zaten tekrar gönderilmemeli.
+ * Gönderilemeyen mailleri ele alır. Medusa mail içeriğini saklamadığından yalnız kayıttan
+ * yeniden üretilebilenler (RETRYABLE_TEMPLATES) tekrar denenir; diğerleri için günde bir
+ * uyarı düşer. Şifre sıfırlama gibi süreli linkler zaten tekrar gönderilmemeli.
  */
 export async function processFailedEmails(
   container: MedusaContainer
@@ -90,14 +150,14 @@ export async function processFailedEmails(
       continue
     }
     try {
-      const result = await sendOrderConfirmationEmail(container, email.resourceId)
-      if (result.skipped === "canceled") continue
+      const sent = await resend(container, email)
+      if (sent === null) continue
       retried++
-      if (result.sent) recovered++
+      if (sent) recovered++
       else remaining.push(email)
     } catch (err) {
       retried++
-      logger.error(`[failed-emails] order=${email.resourceId}: ${errorText(err)}`)
+      logger.error(`[failed-emails] ${email.template} ${email.resourceId}: ${errorText(err)}`)
       remaining.push(email)
     }
   }
