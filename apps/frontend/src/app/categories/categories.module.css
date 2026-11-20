@@ -936,3 +936,16 @@
     font-size: 0.82rem;
   }
 }
+
+/* 360 px'te dört filtre tek satıra sığmıyor, sayfa 1 px sağa taşıyordu. */
+@media (max-width: 380px) {
+  .filterBar,
+  .filterGroup,
+  .filterTrailing {
+    gap: 0.55rem;
+  }
+
+  .filterTrigger {
+    padding-inline: 0.6rem;
+  }
+}
