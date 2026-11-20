@@ -223,11 +223,18 @@ describe("validateCheckoutAddress", () => {
     expect(r.ok && r.normalized.invoice_type).toBe("individual")
   })
 
+  it("kurumsal: şahıs şirketi 11 haneli TCKN ile; kontrol basamağı tutmalı", () => {
+    const corp = { ...base, invoice_type: "corporate" as const, tax_office: "Hayrat", company_name: "Ali Veli Tic." }
+    const ok = validateCheckoutAddress({ ...corp, vkn: "10000000146" })
+    expect(ok.ok).toBe(true)
+    expect(fail({ ...corp, vkn: "10000000147" })).toMatchObject({ field: "vkn", message: "TCKN doğrulanamadı; rakamları kontrol edin." })
+  })
+
   it("kurumsal: VKN → vergi dairesi → unvan zorunlu", () => {
     const corp = { ...base, invoice_type: "corporate" as const }
     expect(fail({ ...corp, vkn: "123" })).toMatchObject({
       field: "vkn",
-      message: "Kurumsal fatura için 10 haneli VKN girin.",
+      message: "Kurumsal fatura için 10 haneli VKN ya da şahıs şirketinde 11 haneli TCKN girin.",
     })
     expect(fail({ ...corp, vkn: "1234567890" })).toMatchObject({ field: "tax_office" })
     expect(fail({ ...corp, vkn: "1234567890", tax_office: "Uzun" })).toMatchObject({

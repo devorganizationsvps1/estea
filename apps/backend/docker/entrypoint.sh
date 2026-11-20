@@ -11,7 +11,15 @@ if [ -f ./.build-meta ]; then
   cat ./.build-meta
 fi
 echo "[escay-backend] Running migrations..."
-npx medusa db:migrate
+# Bağlantı (link) tablosu değişikliklerinde Medusa onay sorar; container'da TTY yok,
+# soru deploy'u takar. Varsayılan: yalnız güvenli işlemler. Güvensiz bir değişiklik
+# (ör. kolon tipi) bekliyorsa tek deploy için MEDUSA_LINKS=all verilir, sonra silinir.
+if [ "${MEDUSA_LINKS:-safe}" = "all" ]; then
+  echo "[escay-backend] MEDUSA_LINKS=all — tüm bağlantı değişiklikleri uygulanıyor"
+  npx medusa db:migrate --execute-all-links
+else
+  npx medusa db:migrate --execute-safe-links
+fi
 
 MODE="${MEDUSA_WORKER_MODE:-shared}"
 echo "[escay-backend] Starting Medusa (worker mode: ${MODE})..."

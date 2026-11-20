@@ -98,7 +98,6 @@ async function confirmEmail(
  * Orders stay on the guest until email verification; then they are re-pointed.
  */
 medusaIntegrationTestRunner({
-  inApp: true,
   env: {
     PAYTR_MOCK: "1",
     PAYTR_MERCHANT_ID: "",

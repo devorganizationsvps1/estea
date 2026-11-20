@@ -17,7 +17,6 @@ import { placeGuestStubOrder } from "./helpers/place-order"
 jest.setTimeout(120 * 1000)
 
 medusaIntegrationTestRunner({
-  inApp: true,
   env: {
     PAYTR_MOCK: "1",
     PAYTR_MERCHANT_ID: "",

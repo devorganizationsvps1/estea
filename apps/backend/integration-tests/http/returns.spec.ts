@@ -52,7 +52,6 @@ async function firstOrderItemId(
  *   npm run test:smoke:full
  */
 medusaIntegrationTestRunner({
-  inApp: true,
   env: {
     PAYTR_MOCK: "1",
     PAYTR_MERCHANT_ID: "",

@@ -16,7 +16,6 @@ import {
 jest.setTimeout(180 * 1000)
 
 medusaIntegrationTestRunner({
-  inApp: true,
   env: {
     PAYTR_MOCK: "1",
     PAYTR_MERCHANT_ID: "",

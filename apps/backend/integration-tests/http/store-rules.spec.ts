@@ -18,7 +18,6 @@ const UNIT_PRICE = 500
  * listesi, iletişim formu.
  */
 medusaIntegrationTestRunner({
-  inApp: true,
   env: {
     PAYTR_MOCK: "1",
     PAYTR_MERCHANT_ID: "",

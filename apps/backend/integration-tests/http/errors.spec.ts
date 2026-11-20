@@ -12,7 +12,6 @@ jest.setTimeout(60 * 1000)
  * Deep RMA smoke remains in npm run test:smoke:* / test:returns.
  */
 medusaIntegrationTestRunner({
-  inApp: true,
   env: {
     PAYTR_MOCK: "1",
     PAYTR_MERCHANT_ID: "",

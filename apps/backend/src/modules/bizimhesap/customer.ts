@@ -95,7 +95,8 @@ export function resolveInvoiceCustomer(order: InvoiceOrderLike): ResolvedInvoice
   let taxOffice: string | null = null
 
   if (invoiceType === "corporate") {
-    taxNo = taxNumber([billMeta], VKN_KEYS, [10])
+    // Şahıs şirketi: vergi no alanında sahibinin TCKN'si (11 hane)
+    taxNo = taxNumber([billMeta], VKN_KEYS, [10, 11])
     companyName = text([billMeta], ["company_name"])
     taxOffice = text([billMeta], ["tax_office"])
   } else if (invoiceType === "individual") {

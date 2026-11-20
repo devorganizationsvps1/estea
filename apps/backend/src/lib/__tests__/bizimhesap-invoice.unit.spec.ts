@@ -1,7 +1,7 @@
 import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils"
 import { BIZIMHESAP_MODULE } from "../../modules/bizimhesap"
 import BizimhesapModuleService from "../../modules/bizimhesap/service"
-import { buildInvoiceNote, issueSalesInvoiceForOrder } from "../bizimhesap-invoice"
+import { buildInvoiceNote, issueSalesInvoiceForOrder, shippingVatRateOf } from "../bizimhesap-invoice"
 import { flagRefundInvoiceForReturn } from "../bizimhesap-refund-invoice"
 import { notifyBizimhesapInvoiceProblem, notifyManualRefundInvoice } from "../bizimhesap-invoice-admin-notify"
 import { recordOpsEvent } from "../ops-events"
@@ -421,5 +421,13 @@ describe("flagRefundInvoiceForReturn", () => {
     expect(res.meta.note).toBe("escay_rejection")
     expect(notifyManualRefundInvoice).not.toHaveBeenCalled()
     expect(order.metadata).toBeNull()
+  })
+})
+
+describe("shippingVatRateOf", () => {
+  it("siparişin kargo vergi satırı önceliklidir, yoksa env", () => {
+    expect(shippingVatRateOf({ shipping_methods: [{ tax_lines: [{ rate: 20 }] }] }, 1)).toBe(20)
+    expect(shippingVatRateOf({ shipping_methods: [{ tax_lines: [] }] }, 20)).toBe(20)
+    expect(shippingVatRateOf({}, 10)).toBe(10)
   })
 })

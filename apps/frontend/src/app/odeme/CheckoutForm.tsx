@@ -997,8 +997,8 @@ export function CheckoutForm({
                   Fatura
                 </h2>
                 <p className="checkout-section__hint">
-                  Bireysel faturada TCKN isteğe bağlıdır; kurumsal faturada VKN,
-                  vergi dairesi ve unvan gerekir.
+                  Bireysel faturada TCKN isteğe bağlıdır; kurumsal faturada VKN
+                  (şahıs şirketinde TCKN), vergi dairesi ve unvan gerekir.
                 </p>
               </div>
 
@@ -1081,17 +1081,17 @@ export function CheckoutForm({
                     </label>
                     <div className="checkout-form__row">
                       <label className="checkout-field">
-                        <span className="checkout-label">VKN</span>
+                        <span className="checkout-label">VKN / TCKN</span>
                         <input
                           ref={vknRef}
                           data-testid="checkout-vkn"
-                          placeholder="10 haneli VKN"
+                          placeholder="VKN ya da şahıs şirketinde TCKN"
                           inputMode="numeric"
-                          maxLength={10}
+                          maxLength={11}
                           value={vkn}
                           onChange={(e) => {
                             setVkn(
-                              e.target.value.replace(/\D/g, "").slice(0, 10)
+                              e.target.value.replace(/\D/g, "").slice(0, 11)
                             )
                             clearFieldError("vkn")
                           }}

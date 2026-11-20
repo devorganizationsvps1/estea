@@ -32,7 +32,7 @@ export type CheckoutAddressInput = {
   country_code?: string
   /** Bireysel default / kurumsal */
   invoice_type?: CheckoutInvoiceType
-  /** Kurumsal: 10 hane VKN → billing.metadata.vkn */
+  /** Kurumsal: 10 hane VKN ya da şahıs şirketinde 11 hane TCKN → billing.metadata.vkn */
   vkn?: string
   /** Bireysel opsiyonel: 11 hane TCKN → billing.metadata.tckn */
   tckn?: string
@@ -304,17 +304,18 @@ export function validateCheckoutAddress(
   const companyName = (input.company_name || "").trim()
 
   if (invoiceType === "corporate") {
-    if (vknDigits.length !== 10) {
+    // Şahıs şirketinin vergi numarası sahibinin TCKN'sidir (11 hane); şirketlerde VKN (10).
+    if (vknDigits.length !== 10 && vknDigits.length !== 11) {
       return {
         ok: false,
-        message: "Kurumsal fatura için 10 haneli VKN girin.",
+        message: "Kurumsal fatura için 10 haneli VKN ya da şahıs şirketinde 11 haneli TCKN girin.",
         field: "vkn",
       }
     }
-    if (!isValidVkn(vknDigits)) {
+    if (vknDigits.length === 10 ? !isValidVkn(vknDigits) : !isValidTckn(vknDigits)) {
       return {
         ok: false,
-        message: "VKN doğrulanamadı; rakamları kontrol edin.",
+        message: `${vknDigits.length === 10 ? "VKN" : "TCKN"} doğrulanamadı; rakamları kontrol edin.`,
         field: "vkn",
       }
     }

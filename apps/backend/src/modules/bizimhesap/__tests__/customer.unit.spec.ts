@@ -88,12 +88,12 @@ describe("resolveInvoiceCustomer", () => {
     })
   })
 
-  it("kurumsal: 11 haneli değer VKN alanında kimlik sayılmaz", () => {
+  it("kurumsal şahıs şirketi: VKN alanındaki 11 haneli TCKN vergi no olarak gider", () => {
     const r = resolveInvoiceCustomer({
       id: "order_4",
       billing_address: { ...addr, metadata: { invoice_type: "corporate", vkn: "10000000146", company_name: "X" } },
     })
-    expect(r.taxNo).toBeNull()
+    expect(r.taxNo).toBe("10000000146")
   })
 
   it("invoice_type yok (eski sipariş): eski sıra, müşteri kartı en sonda", () => {

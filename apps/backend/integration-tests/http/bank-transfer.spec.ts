@@ -20,7 +20,6 @@ const HAVALE = "pp_havale_havale"
  * müşteriye IBAN döner) → admin "Havale alındı" → capture (idempotent).
  */
 medusaIntegrationTestRunner({
-  inApp: true,
   env: {
     PAYTR_MOCK: "1",
     PAYTR_MERCHANT_ID: "",

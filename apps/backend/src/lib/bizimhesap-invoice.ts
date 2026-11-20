@@ -89,6 +89,15 @@ type InvoicePaymentRow = {
   refunds?: { amount?: unknown }[] | null
 }
 
+/** Kargo KDV oranı siparişteki kargo vergi satırından (fatura KDV dökümü siparişle aynı olsun). */
+export function shippingVatRateOf(
+  order: { shipping_methods?: { tax_lines?: { rate?: unknown }[] | null }[] | null },
+  fallback: number
+): number {
+  const rate = order.shipping_methods?.find((m) => m.tax_lines?.length)?.tax_lines?.[0]?.rate
+  return rate == null ? fallback : mapMedusaTaxRateToVat(rate, fallback)
+}
+
 /** İlk tahsilatın günü (YYYY-MM-DD, İstanbul); yoksa undefined → bugün. */
 export function firstCaptureDate(payments: InvoicePaymentRow[]): string | undefined {
   const dates = payments
@@ -200,6 +209,7 @@ async function issueUnderLock(
       "items.discount_total",
       "items.tax_lines.rate",
       "items.adjustments.amount",
+      "shipping_methods.tax_lines.rate",
       "payment_collections.payments.captures.amount",
       "payment_collections.payments.captures.created_at",
       "payment_collections.payments.refunds.amount",
@@ -263,6 +273,7 @@ async function issueUnderLock(
         }[]
         shipping_address?: Address | null
         billing_address?: Address | null
+        shipping_methods?: { tax_lines?: { rate?: unknown }[] | null }[] | null
         payment_collections?: { payments?: InvoicePaymentRow[] | null }[] | null
         customer?: {
           id?: string | null
@@ -400,7 +411,8 @@ async function issueUnderLock(
       lines,
       shipping: {
         grossAmount: roundMoney(asNumber(order.shipping_total)),
-        vatRate: bizimhesap.getShippingVatRate(),
+        // Siparişin kargo vergi satırı; yoksa env (BIZIMHESAP_SHIPPING_VAT_RATE)
+        vatRate: shippingVatRateOf(order, bizimhesap.getShippingVatRate()),
       },
     })
 

@@ -35,7 +35,6 @@ process.env.PAYTR_MERCHANT_SALT = "test-merchant-salt"
  * geri ödeme (PayTR mock) → tekrar geri ödeme no-op. Ayrıca ret yolu.
  */
 medusaIntegrationTestRunner({
-  inApp: true,
   env: {
     PAYTR_MOCK: "1",
     SHIPPING_CARRIER: "",

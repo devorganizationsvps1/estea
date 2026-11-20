@@ -36,6 +36,17 @@ Yerel görseller (`public/` altı) build'de `shared/media/build-media.mjs` ile 9
 - Mağazadaki ürün görselleri (Medusa/S3) hâlâ Next optimizer'ından geçer (yalnız WebP). Önbelleği deploy'lar arasında korumak için frontend'e **Volume** ekle: Advanced → Volumes → tür *Volume*, ad `escay-shop-image-cache`, mount path `/app/.next/cache/images` (yalnız görseller; tüm `.next/cache` eski sürümün veri önbelleğini de taşırdı). Yoksa her deploy sonrası her ürün görseli ilk açılışta yeniden sıkıştırılır.
 - Önüne CDN (ör. Cloudflare) konursa `/_m/*` olduğu gibi önbelleklenebilir: biçimi `<picture type>` seçtiği için `Vary: Accept` gerekmez.
 
+## backend — Medusa 2.22.4 yükseltmesi (2026-11-20, tek seferlik)
+
+- İmaj Node 22'ye geçti (Medusa 2.22 `node >=22.22` ister).
+- `product_variant_inventory_item.required_quantity` kolonu `integer` → `numeric` olur. Medusa bunu
+  "güvensiz bağlantı değişikliği" sayar; açılış betiği varsayılan olarak yalnız güvenli işlemleri
+  uygular (soru sorup deploy'u takmasın diye). Yükseltmeyi deploy ederken **bir kez**
+  `MEDUSA_LINKS=all` ekleyin, backend açılınca değişkeni silin. Değişiklik veri kaybettirmez
+  (tam sayıdan ondalığa genişletme). Unutulursa backend yine açılır, kolon tam sayı kalır.
+- Deploy öncesi `pg_dump` yedeği alın.
+- `STOREFRONT_URL` canlı adres olmalı (boş / localhost ise backend açılmaz).
+
 ## backend — Dönem A
 
 ```
@@ -45,6 +56,7 @@ DATABASE_URL=postgres://<user>:<pass>@postgres:5432/<db>
 # DATABASE_SSL=true
 REDIS_URL=redis://redis:6379
 MEDUSA_WORKER_MODE=shared
+# MEDUSA_LINKS=all   # yalnız güvensiz bağlantı değişikliği bekleyen tek deploy'da (yukarı bakın)
 JWT_SECRET=<openssl rand -base64 32>
 COOKIE_SECRET=<openssl rand -base64 32, farklı>
 # İkisi de en az 32 karakter ve birbirinden farklı olmalı; aksi halde backend açılmaz

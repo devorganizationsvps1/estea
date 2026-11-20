@@ -33,19 +33,21 @@ Es Çay doğrudan DHL (K1), Geliver maddeleri DHL karşılığıyla değerlendir
 | Türkçe hata sayfası yok | Mağaza ve landing'de `error`, `global-error`, `not-found` | |
 | Landing build'i Google Fonts'a bağlı | Fontsource (self-host) | `packages/ui/fonts.ts` |
 | Eski WordPress yazı adresleri | 7 yazı için `/<slug>` → `/blog/<slug>` 301; `elementor-3218` linki düzeltildi | `apps/landing/next.config.ts` |
+| Medusa 2.18 açıkları (21 yüksek) | Medusa 2.22.4 (6 Kasım, 2.23.0 çok yeni), zod 4.6.6, backend imajı Node 22; audit: 0 kritik, 0 yüksek, 11 orta. Bağlantı tablosu değişikliği için tek seferlik `MEDUSA_LINKS=all` (DOKPLOY-ENV.md) | `apps/backend/package.json`, `Dockerfile.backend`, `docker/entrypoint.sh` |
+| Kargo KDV oranı env'den | Siparişin kargo vergi satırından; yoksa env | `shippingVatRateOf` |
+| Şahıs şirketi kurumsal fatura seçemiyordu | Kurumsal faturada 11 haneli TCKN de kabul (kontrol basamaklı), BizimHesap'a vergi no olarak gider | `shared/checkout-address.ts`, `bizimhesap/customer.ts` |
+| Storefront / landing HEALTHCHECK, landing revision ucu | Dockerfile HEALTHCHECK; landing `/api/build-info` | `Dockerfile.storefront`, `Dockerfile.landing` |
 
 ## Açık kalanlar
 
 | Madde | Durum | Ne gerekiyor |
 |---|---|---|
-| Backend'de kalan 21 yüksek açık | ⏳ | Hepsi Medusa 2.18'e bağlı (`@medusajs/*`, zod, lodash, graphql-codegen, vite). Medusa 2.23'e yükseltme ayrı iş: migrasyon + tam test turu |
 | PayTR ile günlük tam karşılaştırma | ⏳ | Uzlaştırma yalnız `paytr_checkout` kaydı olan ödemeleri görür. PayTR'nin işlem dökümü ucu canlıda denenmeli |
 | İade kuruş yuvarlaması | ✅ (kabul) | 3 ayrı kısmi iadede en çok 0,01 TL eksik iade; fazla iade yok |
 | Taksitte vade farkı | 🔧 | Vade farkı iade edilmez (karar); PayTR'nin iadeyi hangi tutar üzerinden kabul ettiği canlıda görülmeli |
-| Kargo KDV oranı env'den | ⏳ | Siparişin kargo vergi satırından okunmalı; şimdilik env = Medusa oranı olmalı |
 | Sipariş numarasında boşluk / fatura numarası | 🔧 | BizimHesap teyidi (K14) |
-| İade kodu yenileme | ⏳ | Sabit iade referansı DHL'de yeni kod açtırmıyor; eski kodu iptal yolu yok |
-| E-fatura mükellefi tespiti, faturada gönderim tarihi, boş TCKN | 🔧 | BizimHesap teyidi (K14); şahıs şirketi (TCKN) kurumsal fatura seçemiyor |
+| İade kodu yenileme | ⏳ | Sabit iade referansı DHL'de yeni kod açtırmıyor. Eski iade siparişinin `cancelorder` ile iptali sandbox'ta denenmedi; denenmeden yazılmayacak |
+| E-fatura mükellefi tespiti, faturada gönderim tarihi, boş TCKN | 🔧 | BizimHesap teyidi (K14): e-fatura / e-arşiv ayrımını BizimHesap mı yapıyor, gönderim tarihi alanı var mı |
 | Gmail SMTP limiti, SPF/DKIM/DMARC | 🔧 | İşlemsel mail servisi + alan adı kayıtları (K12) |
 | CookieYes ID boş | 🔧 | Banner çıkmadan hiçbir takip çalışmaz (K7) |
 | S3 boş (yüklemeler container diskinde) | 🔧 | Bucket + `S3_*`; yedekler için ayrı kapalı bucket |
@@ -53,6 +55,6 @@ Es Çay doğrudan DHL (K1), Geliver maddeleri DHL karşılığıyla değerlendir
 | GA4 "tarayıcı geçmişi değişimlerinde sayfa görüntüleme" | 🔧 | GA4 panelinde kapatılmalı (maskelenmemiş adres + çift sayım) |
 | Uptime / hata takibi / yedek heartbeat | 🔧 | K10 |
 | Storefront :3025 host portu açık mı, Dokploy paneli | 🔧 | Sunucuda kontrol (`Dockerfile.landing` varsayılanı IP:3025) |
-| `GIT_COMMIT` her deploy'da, storefront/landing HEALTHCHECK | ⏳ | Dokploy ayarı |
+| `GIT_COMMIT` her deploy'da | ⏳ | Dokploy build argümanı |
 | Diğer eski WP sayfaları (Fabrikamız, Basında Biz, İletişim) ve kayıp 5 yazı | ⏳ | Eski adresler bilinmiyor |
 | Tam tur testi (gerçek kart, 2 ürün × 2 adet, iade) | 🔧 | Canlıya geçişte |
