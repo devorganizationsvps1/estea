@@ -16,4 +16,6 @@ export const DASHBOARD_CLASS_ANCHORS = [
   { use: "kart / etkin menü satırı", classes: ["shadow-elevation-card-rest", "rounded-lg"] },
   // Eklenti sayfası ikon kutusu
   { use: "menü ikon kutusu", classes: ["shadow-borders-base"] },
+  // Kenar çubuğu menü sütunu (menü sırası CSS order ile verilir)
+  { use: "menü sütunu", classes: ["flex-col", "gap-y-1"] },
 ] as const

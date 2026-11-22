@@ -6,7 +6,7 @@ import { setLayoutConfigurationWorkflow } from "@medusajs/medusa/core-flows"
  * Admin sayfa düzenlerinin ortak varsayılanı (Medusa 2.18 layout ayarı).
  *
  * Sipariş sayfası: sol (geniş) sütun iş sütunudur — sipariş başlığı, sonra
- * sıradaki iş (durum, havale, etiket, kargo, iade ve değişim özeti), sonra ürünler ve gönderi.
+ * sıradaki iş (durum, havale, kargo, etiket, iade ve değişim özeti), sonra ürünler ve gönderi.
  * Sağ sütun yalnız bilgi: müşteri, fatura, sözleşme, olaylar. Tutarlar Özet'te
  * olduğu için Medusa'nın Ödemeler kartı, Es Çay Olaylar'ı tuttuğu için Medusa'nın
  * Aktivite kartı gizlenir. Geliştirici kutuları (JSON, Meta Veriler) da gizlenir.
@@ -27,8 +27,9 @@ const ORDER_MAIN = [
   "core:OrderGeneralSection",
   "widget:escay-order-status",
   "widget:escay-order-bank-transfer",
-  "widget:escay-order-label",
+  // İş sırası: önce gönderi açılır, sonra etiketi basılır.
   "widget:escay-order-shipping",
+  "widget:escay-order-label",
   "widget:escay-order-returns",
   "core:OrderSummarySection",
   "core:OrderFulfillmentSection",
@@ -61,6 +62,9 @@ const LAYOUTS: Record<string, Record<string, WidgetPref>> = {
   // Ürün metadata'sı mağazada özellik etiketi olarak kullanılıyor (spec-labels) — görünür kalır.
   "product.details": hidden(DEV_SECTIONS),
   "customer.details": hidden(DEV_SECTIONS),
+  // Varyant metadata'sı koli ağırlığı / ölçüsü için kullanılıyor (weight_kg) — görünür kalır.
+  "product_variant.details": hidden(DEV_SECTIONS),
+  "inventory_item.details": hidden(DEV_SECTIONS),
 }
 
 export default async function setupAdminLayouts({ container }: ExecArgs) {

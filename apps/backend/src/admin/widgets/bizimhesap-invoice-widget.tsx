@@ -1,4 +1,5 @@
 import { defineWidgetConfig } from "@medusajs/admin-sdk"
+import { formatTL } from "../lib/money"
 import { Badge, Button, Container, Heading, Text } from "@medusajs/ui"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useParams } from "react-router-dom"
@@ -157,7 +158,7 @@ const BizimhesapInvoiceWidget = () => {
             ) : null}
             {typeof inv.total === "number" ? (
               <Text size="small" className="text-ui-fg-subtle">
-                Tutar: {inv.total.toFixed(2)} TRY
+                Tutar: {formatTL(inv.total)}
               </Text>
             ) : null}
             {inv.url ? (
@@ -239,7 +240,7 @@ const BizimhesapInvoiceWidget = () => {
                 <Badge color={rs.color}>{rs.label}</Badge>
                 {typeof r.amount === "number" ? (
                   <Text size="small" className="text-ui-fg-subtle">
-                    Tutar: {r.amount.toFixed(2)} TRY
+                    Tutar: {formatTL(r.amount)}
                   </Text>
                 ) : null}
               </div>

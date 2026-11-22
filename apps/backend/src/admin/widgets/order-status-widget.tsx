@@ -1,4 +1,5 @@
 import { defineWidgetConfig } from "@medusajs/admin-sdk"
+import { formatTL } from "../lib/money"
 import { Button, Container, Heading, Input, Text, toast } from "@medusajs/ui"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useParams } from "react-router-dom"
@@ -92,8 +93,8 @@ const OrderStatusWidget = () => {
         amount <= 0
           ? "Sipariş iptal edildi"
           : json.manual_refund
-            ? `Sipariş iptal edildi. ${amount.toFixed(2)} TL'yi müşteriye elle iade edin.`
-            : `Sipariş iptal edildi, ${amount.toFixed(2)} TL karta iade edildi.`
+            ? `Sipariş iptal edildi. ${formatTL(amount)} tutarını müşteriye elle iade edin.`
+            : `Sipariş iptal edildi, ${formatTL(amount)} karta iade edildi.`
       )
       setCancelOpen(false)
       setCancelReason("")

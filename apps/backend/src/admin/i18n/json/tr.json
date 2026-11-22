@@ -10,7 +10,8 @@
   "actions": {
     "show": "Göster",
     "manage": "Yönet",
-    "goToProductOption": "Ürün seçeneğine git"
+    "goToProductOption": "Ürün seçeneğine git",
+    "continueWithEmail": "Giriş yap"
   },
   "layout": {
     "customizeTopbar": "Üst çubuğu düzenle",
@@ -419,7 +420,9 @@
       "useRecoveryCode": "Kurtarma kodu kullan",
       "useAuthenticatorPrompt": "Doğrulama uygulamanıza erişiminiz var mı?",
       "useAuthenticator": "Doğrulama kodu kullan"
-    }
+    },
+    "title": "Es Çay Yönetim Paneli",
+    "hint": "Devam etmek için giriş yapın"
   },
   "propertyLabels": {
     "domain": "Alan Etiketleri",

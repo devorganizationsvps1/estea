@@ -1,4 +1,5 @@
 import { defineRouteConfig } from "@medusajs/admin-sdk"
+import { formatTL } from "../../lib/money"
 import { ArrowUturnLeft } from "@medusajs/icons"
 import { Badge, Button, Container, Heading, Table, Text } from "@medusajs/ui"
 import { useQuery } from "@tanstack/react-query"
@@ -175,7 +176,7 @@ const ReturnsPage = () => {
                       <Badge size="2xsmall" color="blue" className="ml-1">Değişim</Badge>
                     ) : null}
                     {r.state === "refunded" && r.refund_amount != null ? (
-                      <div className="txt-compact-small text-ui-fg-subtle">{r.refund_amount.toFixed(2)} TL</div>
+                      <div className="txt-compact-small text-ui-fg-subtle">{formatTL(r.refund_amount)}</div>
                     ) : null}
                     {r.state === "problem" && !r.manual_required && r.refund_error ? (
                       <div className="txt-compact-small text-ui-fg-error">{r.refund_error}</div>

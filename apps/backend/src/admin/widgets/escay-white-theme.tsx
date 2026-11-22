@@ -130,6 +130,45 @@ html aside a .shadow-borders-base {
   background: transparent;
   box-shadow: none;
 }
+
+/* Menü sırası: günlük işler üstte (sipariş, iade, değişim, ürün, stok, müşteri, satış),
+   seyrek kullanılan araçlar ince bir çizginin altında. Medusa menüsü tek flex sütunu. */
+html aside nav .flex.flex-col.gap-y-1 > div:has(> div > a[href$="/orders"]) { order: 1; }
+html aside nav .flex.flex-col.gap-y-1 > div:has(> div > a[href$="/iadeler"]) { order: 2; }
+html aside nav .flex.flex-col.gap-y-1 > div:has(> div > a[href$="/degisimler"]) { order: 3; }
+html aside nav .flex.flex-col.gap-y-1 > div:has(> div > a[href$="/products"]) { order: 4; }
+html aside nav .flex.flex-col.gap-y-1 > div:has(> div > a[href$="/inventory"]) { order: 5; }
+html aside nav .flex.flex-col.gap-y-1 > div:has(> div > a[href$="/customers"]) { order: 6; }
+html aside nav .flex.flex-col.gap-y-1 > div:has(> div > a[href$="/sales-stats"]) { order: 7; }
+html aside nav .flex.flex-col.gap-y-1 > div:has(> div > a[href$="/promotions"]) { order: 8; }
+html aside nav .flex.flex-col.gap-y-1 > div:has(> div > a[href$="/price-lists"]) { order: 9; }
+html aside nav .flex.flex-col.gap-y-1 > div:has(> div > a[href$="/ops-events"]) { order: 10; }
+html aside nav .flex.flex-col.gap-y-1 > div:has(> div > a[href$="/kargo-uzlastirma"]) { order: 11; }
+html aside nav .flex.flex-col.gap-y-1 > div:has(> div > a[href$="/promotions"]) {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-base);
+}
+
+/* Giriş ekranı: Medusa logosu yerine Es Çay harfi (metin i18n/json/tr.json login.title). */
+html .max-w-\\[280px\\] > .h-\\[50px\\].w-\\[50px\\] > * { display: none; }
+html .max-w-\\[280px\\] > .h-\\[50px\\].w-\\[50px\\]::before {
+  content: "E";
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--fg-base);
+}
+
+/* Mobil: sipariş Özet satırı (ürün | fiyat-adet | tutar) dar ekranda üst üste binmesin. */
+@media (max-width: 640px) {
+  html main .grid-cols-2.items-center.px-6:has(> .grid-cols-3.items-center.gap-x-4) {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 8px;
+  }
+  html main .grid-cols-2.items-center.px-6 > .grid-cols-3.items-center.gap-x-4 {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  }
+}
 `
 
 if (typeof document !== "undefined") {

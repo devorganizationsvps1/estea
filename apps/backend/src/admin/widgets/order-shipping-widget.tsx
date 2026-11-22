@@ -130,7 +130,7 @@ const OrderShippingWidget = () => {
             <Badge color="red" size="2xsmall">Gönderi yok</Badge>
           </div>
           <Text size="small" className="text-ui-fg-subtle">
-            Ödeme alınmış ama kargo kaydı yok. Logs'taki hatayı giderip gönderiyi açın.
+            Ödeme alınmış ama kargo kaydı yok. Sebebi sağdaki Olaylar kutusunda yazar; giderip gönderiyi açın.
           </Text>
           <div>
             <Button size="small" variant="secondary" isLoading={retry.isPending} onClick={() => void onRetry()}>

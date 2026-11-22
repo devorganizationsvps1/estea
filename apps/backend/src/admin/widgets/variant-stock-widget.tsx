@@ -181,7 +181,8 @@ const VariantStockWidget = () => {
                       size="small"
                       type="number"
                       min={0}
-                      placeholder="1"
+                      placeholder="Adet"
+                      aria-label="Adet"
                       className="w-20"
                       value={amounts[key] ?? ""}
                       onChange={(e) => setAmounts((a) => ({ ...a, [key]: e.target.value }))}
@@ -192,8 +193,8 @@ const VariantStockWidget = () => {
                     <Button size="small" variant="secondary" isLoading={update.isPending} onClick={() => apply(item, level, "remove")}>
                       − Çıkar
                     </Button>
-                    <Button size="small" variant="transparent" isLoading={update.isPending} onClick={() => apply(item, level, "set")}>
-                      Sayım: tam değer yaz
+                    <Button size="small" variant="secondary" isLoading={update.isPending} onClick={() => apply(item, level, "set")}>
+                      Stoğu bu sayıya eşitle
                     </Button>
                   </div>
                 )

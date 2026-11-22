@@ -66,3 +66,37 @@ export async function fetchOpsEvents(params: Record<string, string | number | un
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json() as Promise<{ events: OpsEvent[]; count: number; limit: number; offset: number }>
 }
+
+export type EventGroup = { first: OpsEvent; title: string; count: number; orders: { id: string; label: string }[] }
+
+/**
+ * Başlıktaki sipariş no, tarih ve gün sayısı atılır: "15 gündür teslim edilmedi: #23 · 2026-11-22"
+ * ile "10 gündür teslim edilmedi: #76 · 2026-11-22" aynı olaydır ("Teslim edilmedi").
+ */
+export function eventGroupTitle(title: string): string {
+  const t = title
+    .replace(/\s*·\s*\d{4}-\d{2}-\d{2}/g, "")
+    .replace(/:?\s*#\d+/g, "")
+    .replace(/^\d+ gündür /, "")
+    .trim()
+  return t ? t.charAt(0).toLocaleUpperCase("tr-TR") + t.slice(1) : title
+}
+
+/** Aynı olay (tür + seviye + başlık) tek satır: en yenisi gösterilir, siparişler yanında listelenir. */
+export function groupEvents(events: OpsEvent[]): EventGroup[] {
+  const groups = new Map<string, EventGroup>()
+  for (const e of events) {
+    const title = eventGroupTitle(e.title)
+    const key = `${e.kind}|${e.level}|${title}`
+    let g = groups.get(key)
+    if (!g) {
+      g = { first: e, title, count: 0, orders: [] }
+      groups.set(key, g)
+    }
+    g.count++
+    if (e.order_id && !g.orders.some((o) => o.id === e.order_id)) {
+      g.orders.push({ id: e.order_id, label: `#${e.order_display_id || e.order_id.slice(-6)}` })
+    }
+  }
+  return [...groups.values()]
+}

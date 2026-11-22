@@ -81,7 +81,7 @@ const ReconcilePage = () => {
     <Container className="flex flex-col gap-4 p-6">
       <div className="flex items-center justify-between gap-2">
         <Heading level="h1">Kargo uzlaştırma</Heading>
-        <Badge size="2xsmall" color={applied ? "green" : "grey"}>{applied ? "Uygulandı" : "Kuru çalışma"}</Badge>
+        <Badge size="2xsmall" color={applied ? "green" : "grey"}>{applied ? "Uygulandı" : "Önizleme (kayıt değişmez)"}</Badge>
       </div>
       <Text size="small" className="text-ui-fg-subtle">
         Kargo firmasının raporunu satır satır yapıştırın: <span className="font-mono">ESC-65;TAKIPNO;teslim</span>. Önce kontrol edin. "Uygula" eksik kimlikleri siparişe bağlar ve firmanın bildirdiği kargoya verildi / teslim durumunu işler; zaten doğru olan satırlara dokunulmaz.

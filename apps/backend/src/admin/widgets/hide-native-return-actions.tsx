@@ -23,6 +23,20 @@ div.rounded-b-xl.justify-end:has(> a[href$="/receive"], > a[href$="/refund"]):no
 /** Başlığı verilen Medusa kartının sağ üst "…" menü düğmesi (Özet, Ödeme). */
 const MENU_HEADINGS = ["Özet", "Summary", "Ödeme", "Payment", "Ödemeler", "Payments"]
 
+/**
+ * Medusa'nın "Gönderilmemiş ürünler" kartı Es Çay'ın Kargo kutusuyla aynı şeyi söyler
+ * (ürünler Özet'te, gönderi durumu Kargo'da); iki kez görünmesin.
+ */
+const HIDDEN_CARD_HEADINGS = ["Gönderilmemiş ürünler", "Unfulfilled Items"]
+
+function hideDuplicateCards() {
+  for (const h of document.querySelectorAll<HTMLElement>("main h2")) {
+    if (!HIDDEN_CARD_HEADINGS.includes(h.textContent?.trim() || "")) continue
+    const card = h.closest<HTMLElement>(".shadow-elevation-card-rest")
+    if (card) card.style.display = "none"
+  }
+}
+
 function hideCardMenus() {
   for (const h of document.querySelectorAll<HTMLElement>("h2")) {
     if (!MENU_HEADINGS.includes(h.textContent?.trim() || "")) continue
@@ -37,7 +51,11 @@ function hideCardMenus() {
 const HideNativeReturnActions = () => {
   useEffect(() => {
     hideCardMenus()
-    const observer = new MutationObserver(() => hideCardMenus())
+    hideDuplicateCards()
+    const observer = new MutationObserver(() => {
+      hideCardMenus()
+      hideDuplicateCards()
+    })
     observer.observe(document.body, { childList: true, subtree: true })
     return () => observer.disconnect()
   }, [])

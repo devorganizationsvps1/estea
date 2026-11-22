@@ -1,6 +1,7 @@
 import { Badge, Button, Checkbox, Container, Heading, Input, Label, Text, toast } from "@medusajs/ui"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
+import { formatTL } from "../lib/money"
 
 export type ReturnRow = {
   id: string
@@ -136,6 +137,8 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
   const qc = useQueryClient()
   const [reasonById, setReasonById] = useState<Record<string, string>>({})
   const [codeById, setCodeById] = useState<Record<string, string>>({})
+  // Reddet / talebi iptal: nadir işlemler, "Diğer işlemler" açılınca görünür
+  const [moreById, setMoreById] = useState<Record<string, boolean>>({})
   // returnId → item_id → kabul satırı (varsayılan: talep edilen adedin tamamı stoğa)
   const [acceptById, setAcceptById] = useState<Record<string, Record<string, AcceptRow>>>({})
   const [partialReasonById, setPartialReasonById] = useState<Record<string, string>>({})
@@ -416,7 +419,7 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
                 </Text>
               ) : r.status === "requested" && !rejected ? (
                 <Text size="small" className="text-ui-fg-error">
-                  Müşteriye iade kodu gitmedi. Kargo panelinden açtığınız kodu aşağıya girin.
+                  Müşteriye iade kodu gitmedi. Aşağıdan kargo firmasından kod alın ya da kargo panelinde açtığınız kodu yazıp gönderin.
                 </Text>
               ) : null}
               {r.status === "requested" && !rejected ? (
@@ -469,9 +472,12 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
                       return s + (unitRefund.get(it.item_id as string) || 0) * (row.restock + row.damaged)
                     }, 0)
                     return (
-                      <div className="flex flex-col gap-2 rounded-md bg-ui-bg-subtle p-2">
+                      <div className="flex flex-col gap-2 rounded-md bg-ui-bg-subtle p-3">
+                        <Text size="small" weight="plus">
+                          Paket geldiğinde
+                        </Text>
                         <Text size="xsmall" className="text-ui-fg-subtle">
-                          Paket gelince: sağlam olanı Stoğa, bozuk olanı Hasarlı yazın. İkisinin de parası iade edilir; kalan adet kabul edilmez.
+                          Paket gelince adetleri yazın. Sağlam ürün stoğa döner, hasarlı ürün stoğa girmez; ikisinin de parası iade edilir. Yazmadığınız adet kabul edilmemiş sayılır.
                         </Text>
                         {entries.map((it) => {
                           const id = it.item_id as string
@@ -483,7 +489,7 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
                                 {it.quantity} × {lineTitle.get(id) || "Ürün"}
                               </Text>
                               <div className="flex flex-wrap items-center gap-2">
-                                <Text size="xsmall">Stoğa</Text>
+                                <Text size="xsmall">Sağlam (stoğa döner)</Text>
                                 <Input
                                   size="small"
                                   type="number"
@@ -493,7 +499,7 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
                                   onChange={(e) => setAccept(r, id, { restock: Number(e.target.value) })}
                                   className="w-[60px]"
                                 />
-                                <Text size="xsmall">Hasarlı</Text>
+                                <Text size="xsmall">Hasarlı (stoğa girmez)</Text>
                                 <Input
                                   size="small"
                                   type="number"
@@ -528,13 +534,13 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
                               onCheckedChange={(v) => setShipById((prev) => ({ ...prev, [r.id]: v === true }))}
                             />
                             <Label htmlFor={`ship-${r.id}`} size="xsmall" className="text-ui-fg-subtle">
-                              Kargo ücretini de iade et ({shippingTotal.toFixed(2)} TL) — işaretlemezseniz yalnız kusur satıcıdaysa eklenir
+                              Kargo ücretini de iade et ({formatTL(shippingTotal)}). İşaretlemezseniz yalnız kusur bizdeyse eklenir.
                             </Label>
                           </div>
                         ) : null}
                         {accepted > 0 && estimate > 0 ? (
                           <Text size="xsmall" className="text-ui-fg-subtle">
-                            İade edilecek: ~{(estimate + (shipById[r.id] ? shippingTotal : 0)).toFixed(2)} TL
+                            İade edilecek: yaklaşık {formatTL(estimate + (shipById[r.id] ? shippingTotal : 0))}
                             {shipById[r.id] ? " (kargo dahil)" : ""}
                           </Text>
                         ) : null}
@@ -556,7 +562,7 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
                             const ok = window.confirm(
                               exchange
                                 ? `${summary}\n\nDEĞİŞİM: para iadesi yapılmaz; kabul edilen adet kadar yeni ürünün gönderisi otomatik açılır. Devam?`
-                                : `${summary}${ship ? `\n• Kargo ücreti de iade edilecek: ${shippingTotal.toFixed(2)} TL` : ""}\n\nKabul edilen ürünlerin parası müşterinin kartına OTOMATİK iade edilir (havale siparişinde elle). Kabul edilmeyenler için para iadesi yapılmaz. Devam?`
+                                : `${summary}${ship ? `\n• Kargo ücreti de iade edilecek: ${formatTL(shippingTotal)}` : ""}\n\nKabul edilen ürünlerin parası müşterinin kartına OTOMATİK iade edilir (havale siparişinde elle). Kabul edilmeyenler için para iadesi yapılmaz. Devam?`
                             )
                             if (ok) receiveMut.mutate({ ret: r, rows, reason: partialReasonById[r.id] || "", refundShipping: Boolean(ship) })
                           }}
@@ -582,14 +588,14 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
                 r.metadata.paytr_refund.manual_required ? (
                   <Text size="small" className="text-ui-fg-error">
                     Ödeme PayTR ile alınmamış (havale).{" "}
-                    {(r.metadata.paytr_refund.amount ?? 0).toFixed(2)} TL&apos;yi
+                    {formatTL(r.metadata.paytr_refund.amount ?? 0)} tutarını
                     müşterinin IBAN&apos;ına havale edin, BizimHesap&apos;ta iade
                     faturasını elle kesin ve müşteriye bilgi verin.
                   </Text>
                 ) : (
                   <>
                     <Text size="small" className="text-ui-fg-error">
-                      {(r.metadata.paytr_refund.amount ?? 0).toFixed(2)} TL
+                      {formatTL(r.metadata.paytr_refund.amount ?? 0)}{" "}
                       iade edilemedi: {r.metadata.paytr_refund.error || "bilinmiyor"}
                     </Text>
                     <Button
@@ -607,54 +613,79 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
                 )
               ) : null}
               {canReject ? (
-                <>
-                  <Input
-                    placeholder="Red sebebi (müşteriye görünür, opsiyonel)"
-                    value={reasonById[r.id] || ""}
-                    onChange={(e) =>
-                      setReasonById((prev) => ({
-                        ...prev,
-                        [r.id]: e.target.value,
-                      }))
-                    }
-                  />
-                  <Button
-                    variant="danger"
-                    size="small"
-                    isLoading={
-                      rejectMut.isPending &&
-                      rejectMut.variables?.returnId === r.id
-                    }
-                    onClick={() =>
-                      rejectMut.mutate({
-                        returnId: r.id,
-                        reason: reasonById[r.id] || "",
-                      })
-                    }
-                  >
-                    Reddet (para iadesi yapılmaz)
-                  </Button>
-                </>
-              ) : null}
-              {r.status === "requested" && !rejected ? (
-                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-ui-border-base pt-3">
-                  <Text size="small" className="text-ui-fg-subtle">
-                    Müşteri vazgeçti ya da talep yanlışlıkla açıldıysa
-                  </Text>
+                <div className="border-t border-ui-border-base pt-3">
                   <Button
                     size="small"
-                    variant="secondary"
-                    isLoading={cancelMut.isPending && cancelMut.variables?.returnId === r.id}
-                    disabled={cancelMut.isPending}
-                    onClick={() => {
-                      const ok = window.confirm(
-                        "İade talebi iptal edilecek. Para iadesi yapılmaz, müşteriye mail gitmez; gönderilen iade kodu kullanılmamalı. Devam?"
-                      )
-                      if (ok) cancelMut.mutate({ returnId: r.id })
-                    }}
+                    variant="transparent"
+                    onClick={() => setMoreById((prev) => ({ ...prev, [r.id]: !prev[r.id] }))}
                   >
-                    Talebi iptal et
+                    {moreById[r.id] ? "Diğer işlemleri gizle" : "Diğer işlemler (reddet, talebi iptal et)"}
                   </Button>
+                  {moreById[r.id] ? (
+                    <div className="mt-3 flex flex-col gap-4">
+                      <div className="flex flex-col gap-2">
+                        <Text size="small" weight="plus">
+                          İadeyi reddet
+                        </Text>
+                        <Text size="small" className="text-ui-fg-subtle">
+                          Ürün iade şartlarına uymuyorsa. Para iadesi yapılmaz, müşteriye ret maili gider.
+                        </Text>
+                        <Input
+                          placeholder="Red sebebi (müşteriye mailde görünür)"
+                          value={reasonById[r.id] || ""}
+                          onChange={(e) =>
+                            setReasonById((prev) => ({
+                              ...prev,
+                              [r.id]: e.target.value,
+                            }))
+                          }
+                        />
+                        <div>
+                          <Button
+                            variant="secondary"
+                            size="small"
+                            className="text-ui-fg-error"
+                            isLoading={rejectMut.isPending && rejectMut.variables?.returnId === r.id}
+                            disabled={rejectMut.isPending}
+                            onClick={() => {
+                              const ok = window.confirm(
+                                "İade reddedilecek: para iadesi yapılmaz ve müşteriye ret maili gider. Bu işlem geri alınamaz. Devam?"
+                              )
+                              if (ok) rejectMut.mutate({ returnId: r.id, reason: reasonById[r.id] || "" })
+                            }}
+                          >
+                            İadeyi reddet
+                          </Button>
+                        </div>
+                      </div>
+                      {r.status === "requested" && !rejected ? (
+                        <div className="flex flex-col gap-2">
+                          <Text size="small" weight="plus">
+                            Talebi iptal et
+                          </Text>
+                          <Text size="small" className="text-ui-fg-subtle">
+                            Müşteri vazgeçtiyse ya da talep yanlışlıkla açıldıysa. Para iadesi yapılmaz, müşteriye mail gitmez.
+                          </Text>
+                          <div>
+                            <Button
+                              size="small"
+                              variant="secondary"
+                              isLoading={cancelMut.isPending && cancelMut.variables?.returnId === r.id}
+                              disabled={cancelMut.isPending}
+                              onClick={() => {
+                                const ok = window.confirm(
+                                  "İade talebi iptal edilecek. Para iadesi yapılmaz, müşteriye mail gitmez; gönderilen iade kodu kullanılmamalı. Devam?"
+                                )
+                                if (ok) cancelMut.mutate({ returnId: r.id })
+                              }}
+                            >
+                              Talebi iptal et
+                            </Button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </div>

@@ -4,6 +4,10 @@ import {
 } from "@medusajs/framework/http"
 import { ContainerRegistrationKeys } from "@medusajs/framework/utils"
 import { classifyReturn } from "../../../lib/return-admin-list"
+import { listAdminExchanges } from "../../../lib/exchange-admin-list"
+
+/** Değişimler sayfasındaki "Açık" sekmesiyle aynı durumlar. */
+const OPEN_EXCHANGE_STATES = new Set(["awaiting_return", "to_ship", "failed", "label_ready"])
 
 type OrderRow = {
   status?: string | null
@@ -17,7 +21,7 @@ const RECENT = 300
 
 /**
  * Admin: GET /admin/escay-nav-counts — kenar çubuğu rozetleri.
- * returns: bekleyen + sorunlu iade; orders: kargolanacak (ödenmiş, etiket basılmamış,
+ * returns: bekleyen + sorunlu iade; exchanges: açık değişim; orders: kargolanacak (ödenmiş, etiket basılmamış,
  * kargoya verilmemiş) + havale bekleyen.
  */
 export const GET = async (req: AuthenticatedMedusaRequest, res: MedusaResponse) => {
@@ -60,5 +64,10 @@ export const GET = async (req: AuthenticatedMedusaRequest, res: MedusaResponse) 
     if (!shipped && !o.metadata?.label_printed_at) toShip++
   }
 
-  res.json({ returns: returnCount, orders: toShip + awaitingBankTransfer, to_ship: toShip, awaiting_bank_transfer: awaitingBankTransfer })
+  // Rozet yardımcıdır: değişim listesi okunamazsa diğer sayılar yine dönsün.
+  const exchanges = await listAdminExchanges(req.scope)
+    .then((rows) => rows.filter((r) => OPEN_EXCHANGE_STATES.has(r.state)).length)
+    .catch(() => 0)
+
+  res.json({ returns: returnCount, exchanges, orders: toShip + awaitingBankTransfer, to_ship: toShip, awaiting_bank_transfer: awaitingBankTransfer })
 }

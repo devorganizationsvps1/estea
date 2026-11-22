@@ -1,10 +1,11 @@
 import { useEffect } from "react"
 
-type Counts = { returns: number; orders: number }
+type Counts = { returns: number; orders: number; exchanges?: number }
 
 /** Kenar çubuğu linki (href sonu) → sayaç alanı. */
 const TARGETS: { suffix: string; key: keyof Counts; title: string }[] = [
   { suffix: "/iadeler", key: "returns", title: "Bekleyen / sorunlu iade" },
+  { suffix: "/degisimler", key: "exchanges", title: "Açık değişim" },
   { suffix: "/orders", key: "orders", title: "Kargolanacak sipariş" },
 ]
 

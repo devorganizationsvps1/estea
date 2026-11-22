@@ -110,7 +110,8 @@ const OrderLabelWidget = () => {
               </Button>
             </>
           ) : (
-            <Button size="small" variant="primary" isLoading={busy === "label"} disabled={busy !== null} onClick={() => print(false)}>
+            // Firma etiketi yokken fiş ikincil iştir; sayfanın ana düğmesi durum / kargo adımıdır.
+            <Button size="small" variant="secondary" isLoading={busy === "label"} disabled={busy !== null} onClick={() => print(false)}>
               Fişi yazdır
             </Button>
           )}

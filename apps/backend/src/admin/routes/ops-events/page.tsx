@@ -4,11 +4,12 @@ import { Badge, Button, Container, Heading, Select, Table, Text } from "@medusaj
 import { useQuery } from "@tanstack/react-query"
 import { useEffect, useRef } from "react"
 import { Link } from "react-router-dom"
-import { fetchOpsEvents, formatEventDate, OPS_KIND_LABEL, OPS_LEVEL_BADGE } from "../../lib/ops-events"
+import { fetchOpsEvents, formatEventDate, groupEvents, OPS_KIND_LABEL, OPS_LEVEL_BADGE } from "../../lib/ops-events"
 import { useNavBadges } from "../../components/nav-badges"
 import { usePersistedState, useScrollRestore } from "../../lib/persisted-state"
+const MAX_ORDER_LINKS = 6
 
-const PAGE_SIZE = 50
+const PAGE_SIZE = 200
 
 const KIND_FILTERS: { value: string; label: string }[] = [
   { value: "all", label: "Tüm olaylar" },
@@ -20,7 +21,8 @@ const KIND_FILTERS: { value: string; label: string }[] = [
 ]
 
 const LEVEL_FILTERS: { value: string; label: string }[] = [
-  { value: "all", label: "Tüm seviyeler" },
+  { value: "important", label: "Hata ve uyarı" },
+  { value: "all", label: "Hepsi (bilgi dahil)" },
   { value: "error", label: "Hata" },
   { value: "warning", label: "Uyarı" },
   { value: "info", label: "Bilgi" },
@@ -33,7 +35,7 @@ const LEVEL_FILTERS: { value: string; label: string }[] = [
 const OpsEventsPage = () => {
   useNavBadges()
   const [kind, setKind] = usePersistedState("ops-events:kind", "all")
-  const [level, setLevel] = usePersistedState("ops-events:level", "all")
+  const [level, setLevel] = usePersistedState("ops-events:level2", "important")
   const [page, setPage] = usePersistedState("ops-events:page", 0)
 
   const { data, isLoading, refetch, isFetching } = useQuery({
@@ -64,7 +66,7 @@ const OpsEventsPage = () => {
         <div>
           <Heading level="h1">Olay kaydı</Heading>
           <Text size="small" className="text-ui-fg-subtle">
-            Ödeme, iptal, kargo ve iade olayları. Hatalar kırmızı etiketle işaretlenir.
+            Bakılması gereken hata ve uyarılar. Aynı olay tek satırda toplanır.
           </Text>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -102,23 +104,37 @@ const OpsEventsPage = () => {
             </Table.Row>
           </Table.Header>
           <Table.Body>
-            {events.map((e) => {
+            {groupEvents(events).map(({ first: e, title, count: n, orders }) => {
               const badge = OPS_LEVEL_BADGE[e.level] || OPS_LEVEL_BADGE.info
               return (
                 <Table.Row key={e.id}>
                   <Table.Cell className="whitespace-nowrap">{formatEventDate(e.created_at)}</Table.Cell>
                   <Table.Cell><Badge size="2xsmall" color={badge.color}>{badge.label}</Badge></Table.Cell>
-                  <Table.Cell className="whitespace-nowrap">{OPS_KIND_LABEL[e.kind] || e.kind}</Table.Cell>
+                  <Table.Cell className="whitespace-nowrap">
+                    {OPS_KIND_LABEL[e.kind] || e.kind}
+                    {n > 1 ? <Badge size="2xsmall" color="grey" className="ml-2">{n} kez</Badge> : null}
+                  </Table.Cell>
                   <Table.Cell>
-                    {e.order_id ? (
-                      <Link to={`/orders/${e.order_id}`} className="text-ui-fg-interactive">
-                        #{e.order_display_id || e.order_id.slice(-6)}
-                      </Link>
+                    {orders.length ? (
+                      <div className="flex flex-wrap gap-x-2">
+                        {orders.slice(0, MAX_ORDER_LINKS).map((o) => (
+                          <Link key={o.id} to={`/orders/${o.id}`} className="text-ui-fg-interactive">
+                            {o.label}
+                          </Link>
+                        ))}
+                        {orders.length > MAX_ORDER_LINKS ? (
+                          <span className="text-ui-fg-subtle">+{orders.length - MAX_ORDER_LINKS} sipariş</span>
+                        ) : null}
+                      </div>
                     ) : "—"}
                   </Table.Cell>
                   <Table.Cell className="max-w-[520px]">
-                    <div className="txt-compact-small-plus">{e.title}</div>
-                    {e.detail ? (
+                    <div className="txt-compact-small-plus">{n > 1 ? title : e.title}</div>
+                    {n > 1 && orders.length > 1 ? (
+                      <div className="txt-compact-small text-ui-fg-subtle">
+                        {orders.length} sipariş. Ayrıntı için siparişi açın; her siparişin kaydı Olaylar kutusunda.
+                      </div>
+                    ) : e.detail ? (
                       <div className="txt-compact-small text-ui-fg-subtle whitespace-pre-wrap">{e.detail}</div>
                     ) : null}
                   </Table.Cell>
