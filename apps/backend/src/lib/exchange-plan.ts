@@ -49,6 +49,9 @@ export type ExchangeMeta = {
 
 export const EXCHANGE_META_KEY = "escay_exchange"
 
+/** İade teslim alınmadan yeni ürün gönderilemez. Panel bu hatada "Yeni ürünü gönder"i gizler. */
+export const EXCHANGE_NOTHING_ACCEPTED = "Kabul edilen ürün yok — gönderilecek yeni ürün yok."
+
 export function readExchange(metadata: Record<string, unknown> | null | undefined): ExchangeMeta | null {
   const raw = metadata?.[EXCHANGE_META_KEY]
   if (!raw || typeof raw !== "object") return null

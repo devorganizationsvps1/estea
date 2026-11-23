@@ -37,6 +37,28 @@ function hideDuplicateCards() {
   }
 }
 
+/**
+ * Medusa'nın "Gönderi #1" kartındaki "Gönderildi / Teslim edildi olarak işaretle" düğmeleri
+ * Es Çay'ın onayından geçmez (müşteriye mail gider, teslimde fatura kesilir). Aynı iş
+ * Sipariş durumu kartında, onayla yapılır.
+ */
+const NATIVE_MARK = /(olarak işaretle|^Mark as (shipped|delivered))/i
+
+function hideNativeFulfillmentActions() {
+  for (const h of document.querySelectorAll<HTMLElement>("main h2")) {
+    if (!/^(Gönderi|Fulfillment) #/.test(h.textContent?.trim() || "")) continue
+    const card = h.closest<HTMLElement>(".shadow-elevation-card-rest")
+    if (!card) continue
+    for (const btn of card.querySelectorAll<HTMLButtonElement>("button")) {
+      if (!NATIVE_MARK.test(btn.textContent?.trim() || "")) continue
+      btn.style.display = "none"
+      // Şeritte başka görünen düğme kalmadıysa şerit de gizlenir.
+      const strip = btn.parentElement
+      if (strip && [...strip.children].every((c) => (c as HTMLElement).style.display === "none")) strip.style.display = "none"
+    }
+  }
+}
+
 function hideCardMenus() {
   for (const h of document.querySelectorAll<HTMLElement>("h2")) {
     if (!MENU_HEADINGS.includes(h.textContent?.trim() || "")) continue
@@ -50,12 +72,13 @@ function hideCardMenus() {
 
 const HideNativeReturnActions = () => {
   useEffect(() => {
-    hideCardMenus()
-    hideDuplicateCards()
-    const observer = new MutationObserver(() => {
+    const run = () => {
       hideCardMenus()
       hideDuplicateCards()
-    })
+      hideNativeFulfillmentActions()
+    }
+    run()
+    const observer = new MutationObserver(run)
     observer.observe(document.body, { childList: true, subtree: true })
     return () => observer.disconnect()
   }, [])

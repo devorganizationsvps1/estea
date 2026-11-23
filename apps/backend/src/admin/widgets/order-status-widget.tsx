@@ -5,6 +5,7 @@ import { useParams } from "react-router-dom"
 import { useState } from "react"
 import { InlineConfirm, type ConfirmSpec } from "../components/inline-confirm"
 import { formatDateTime } from "../lib/dates"
+import { fetchOpsEvents, tidyEventText } from "../lib/ops-events"
 import { formatTL } from "../lib/money"
 import { resolveNextStep, type StatusAction } from "../lib/order-next-step"
 import { nextOrderStatusAction, ORDER_STATUS_BADGE, resolveOrderTimeline, type OrderTimelineInput } from "../lib/order-timeline"
@@ -104,6 +105,13 @@ const OrderStatusWidget = () => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       return res.json() as Promise<FulfillmentState>
     },
+  })
+
+  // Olaylar kutusuyla aynı sorgu (önbellek ortak): gönderi açılamadıysa sebebi kartta gösterilir.
+  const events = useQuery({
+    queryKey: ["order-ops-events", orderId],
+    enabled: Boolean(orderId),
+    queryFn: () => fetchOpsEvents({ order_id: orderId, limit: 20 }),
   })
 
   const refresh = () => void qc.invalidateQueries()
@@ -229,6 +237,8 @@ const OrderStatusWidget = () => {
 
   const step = resolveNextStep({ nextAction, needsShipment, carrierLinked, hasLabel })
   if (!step) return null
+  // En yeni "gönderi açılamadı" kaydı (liste en yeni önce gelir).
+  const lastFailure = (events.data?.events || []).find((e) => e.kind === "shipment.failed")
   const busy = advanceMut.isPending || openShipment.isPending || reship.isPending || printing !== null
 
   const print = async (withSlip: boolean) => {
@@ -284,7 +294,7 @@ const OrderStatusWidget = () => {
   )
 
   const guidance: Record<typeof step.kind, string> = {
-    open_shipment: `Ödeme alınmış ama ${carrierName} gönderisi açılmamış. Sebebi sağdaki Olaylar kutusunda yazar; giderip gönderiyi açın.`,
+    open_shipment: `Ödeme alınmış ama ${carrierName} gönderisi açılmamış. Gönderi aç düğmesiyle açın.`,
     wait_label: "Gönderi açıldı, kargo etiketi bekleniyor. Birkaç dakika içinde gelir; bu kart kendiliğinden yenilenir.",
     print_label: "Kargo etiketi hazır. Yazdırıp pakete yapıştırın; sipariş Hazırlandı olur.",
     wait_courier: `Etiket basıldı. ${carrierName} paketi alınca durum kendiliğinden Kargoya verildi olur.`,
@@ -329,6 +339,11 @@ const OrderStatusWidget = () => {
 
       <div className="flex flex-col gap-1">
         <Text size="small">{guidance[step.kind]}</Text>
+        {step.kind === "open_shipment" && lastFailure ? (
+          <Text size="small" className="text-ui-fg-error">
+            Son denemede açılamadı: {tidyEventText(lastFailure.detail || lastFailure.title)}
+          </Text>
+        ) : null}
         {shipmentRef || tracking ? (
           <Text size="small" className="text-ui-fg-subtle">
             {carrierName}
@@ -352,7 +367,7 @@ const OrderStatusWidget = () => {
             disabled={busy}
             onClick={() =>
               setConfirm({
-                text: `Yeni ${carrierName} gönderisi açılır ve etiket oluşturulur (kargo ücreti doğar). Firmada bu siparişe ait açık gönderi olmadığından emin olun.`,
+                text: `Yeni ${carrierName} gönderisi açılır ve etiket oluşturulur (kargo ücreti doğar). Bu sipariş için firma panelinde elle gönderi açtıysanız yenisini açmayın; Diğer işlemler altındaki Dış gönderi bağla ile onu bağlayın.`,
                 confirmLabel: "Gönderi aç",
                 onConfirm: () => openShipment.mutate(),
               })

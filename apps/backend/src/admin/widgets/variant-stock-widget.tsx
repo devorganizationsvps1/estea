@@ -87,7 +87,7 @@ const VariantStockWidget = () => {
   const locationName = (id: string) => locationsQ.data?.stock_locations.find((l) => l.id === id)?.name || id
 
   const update = useMutation({
-    mutationFn: async (input: { itemId: string; locationId: string; stocked: number }) => {
+    mutationFn: async (input: { itemId: string; locationId: string; stocked: number; from: number }) => {
       const res = await fetch(`/admin/inventory-items/${input.itemId}/location-levels/${input.locationId}`, {
         method: "POST",
         credentials: "include",
@@ -99,7 +99,7 @@ const VariantStockWidget = () => {
       return input
     },
     onSuccess: (input) => {
-      toast.success(`Stok güncellendi: ${input.stocked}`)
+      toast.success(`Stok ${input.from} adetten ${input.stocked} adede güncellendi`)
       setAmounts((a) => ({ ...a, [`${input.itemId}:${input.locationId}`]: "" }))
       void qc.invalidateQueries()
     },
@@ -116,9 +116,11 @@ const VariantStockWidget = () => {
 
   const apply = (item: InventoryItem, level: LocationLevel, mode: "add" | "remove" | "set") => {
     const key = `${item.id}:${level.location_id}`
-    const n = Math.floor(Number(amounts[key] || (mode === "set" ? "" : "1")))
-    if (!Number.isFinite(n) || n < 0 || (mode !== "set" && n === 0)) {
-      toast.error("Geçerli bir adet girin.")
+    // Boş alan sayı sayılmaz: "eşitle" 0'a, "ekle / çıkar" 1'e çevirmesin (düğmeler de pasif).
+    const raw = (amounts[key] ?? "").trim()
+    const n = Math.floor(Number(raw))
+    if (!raw || !Number.isFinite(n) || n < 0 || (mode !== "set" && n === 0)) {
+      toast.error("Önce adet yazın.")
       return
     }
     const current = Number(level.stocked_quantity) || 0
@@ -128,15 +130,19 @@ const VariantStockWidget = () => {
       return
     }
     const reserved = Number(level.reserved_quantity) || 0
-    const run = () => update.mutate({ itemId: item.id, locationId: level.location_id, stocked: next })
+    const run = () => update.mutate({ itemId: item.id, locationId: level.location_id, stocked: next, from: current })
     // Eşitleme mevcut sayıyı ezer (ekle / çıkar gibi geri alınması kolay değil): onay ister.
     if (mode === "set") {
       setConfirm({
         key,
         spec: {
           text: `${locationName(level.location_id)} stoğu ${current} adetten ${next} adede çekilir. Mağazada satılabilir adet buna göre değişir.`,
-          lines: next < reserved ? [`Dikkat: ${reserved} adet ödeme ya da kargo bekleyen siparişlere ayrılmış.`] : undefined,
+          lines: [
+            ...(next === 0 ? ["Stok sıfırlanır: ürün mağazada tükendi görünür."] : []),
+            ...(next < reserved ? [`Dikkat: ${reserved} adet ödeme ya da kargo bekleyen siparişlere ayrılmış.`] : []),
+          ],
           confirmLabel: `Stoğu ${next} yap`,
+          danger: next === 0 || next < reserved,
           onConfirm: run,
         },
       })
@@ -182,6 +188,7 @@ const VariantStockWidget = () => {
             ) : (
               (item.location_levels || []).map((level) => {
                 const key = `${item.id}:${level.location_id}`
+                const empty = !(amounts[key] ?? "").trim()
                 return (
                   <div key={key} className="flex flex-wrap items-center gap-3">
                     <div className="min-w-[180px]">
@@ -202,15 +209,19 @@ const VariantStockWidget = () => {
                       aria-label="Adet"
                       className="w-20"
                       value={amounts[key] ?? ""}
-                      onChange={(e) => setAmounts((a) => ({ ...a, [key]: e.target.value }))}
+                      onChange={(e) => {
+                        setAmounts((a) => ({ ...a, [key]: e.target.value }))
+                        // Sayı değişince açık onay eski sayıyı göstermesin.
+                        setConfirm(null)
+                      }}
                     />
-                    <Button size="small" variant="primary" isLoading={update.isPending} onClick={() => apply(item, level, "add")}>
+                    <Button size="small" variant="primary" disabled={empty || update.isPending} onClick={() => apply(item, level, "add")}>
                       + Ekle
                     </Button>
-                    <Button size="small" variant="secondary" isLoading={update.isPending} onClick={() => apply(item, level, "remove")}>
+                    <Button size="small" variant="secondary" disabled={empty || update.isPending} onClick={() => apply(item, level, "remove")}>
                       − Çıkar
                     </Button>
-                    <Button size="small" variant="secondary" isLoading={update.isPending} onClick={() => apply(item, level, "set")}>
+                    <Button size="small" variant="secondary" disabled={empty || update.isPending} onClick={() => apply(item, level, "set")}>
                       Stoğu bu sayıya eşitle
                     </Button>
                     <div className="basis-full empty:hidden">

@@ -440,7 +440,8 @@ const OrderBulkLabelsWidget = () => {
                 </Select.Content>
               </Select>
             </div>
-            <div className="ml-auto flex gap-2">
+            {/* Telefonda dört eylem ikişerli ızgara: dar kutucuklara bölünmesin. */}
+            <div className="flex gap-2 max-sm:grid max-sm:w-full max-sm:grid-cols-2 sm:ml-auto">
               <Button
                 size="small"
                 variant="primary"
@@ -466,7 +467,7 @@ const OrderBulkLabelsWidget = () => {
                 isLoading={busy === "ship"}
                 onClick={() => askMarkStatus("ship")}
               >
-                Kargoya verildi ({selectedIds.length})
+                Kargoya verildi yap, mailsiz ({selectedIds.length})
               </Button>
               <Button
                 size="small"
@@ -475,7 +476,7 @@ const OrderBulkLabelsWidget = () => {
                 isLoading={busy === "deliver"}
                 onClick={() => askMarkStatus("deliver")}
               >
-                Teslim edildi ({selectedIds.length})
+                Teslim edildi yap, mailsiz ({selectedIds.length})
               </Button>
               {/* "Yeniden gönderi aç" gizli (2026-10-14, kullanıcı isteği) — gerekirse SHOW_RESHIP = true. */}
               {SHOW_RESHIP ? (
@@ -523,7 +524,41 @@ const OrderBulkLabelsWidget = () => {
                     : "Sipariş yok."}
               </Text>
             ) : (
-              <table className="w-full min-w-[640px] text-left">
+              <>
+              <ul className="m-0 list-none divide-y p-0 sm:hidden">
+                {rows.map(({ order, timeline }) => {
+                  const ship = shippingStatus(order)
+                  return (
+                    <li key={order.id} className="flex items-start gap-3 px-6 py-3">
+                      <Checkbox
+                        className="mt-1"
+                        aria-label={`Sipariş #${order.display_id ?? order.id} seç`}
+                        checked={selected.has(order.id)}
+                        disabled={awaitingBankTransfer(order) || timeline.canceled}
+                        onCheckedChange={() => toggle(order.id)}
+                      />
+                      <div className="flex min-w-0 flex-col gap-1">
+                        <Link to={`/orders/${order.id}`} className="txt-compact-small-plus text-ui-fg-interactive">
+                          #{order.display_id ?? order.id}{" "}
+                          {[order.shipping_address?.first_name, order.shipping_address?.last_name].filter(Boolean).join(" ")}
+                        </Link>
+                        <div className="flex flex-wrap gap-1">
+                          <Badge size="2xsmall" color={timeline.canceled ? "red" : timeline.currentKey === "prepared" ? "blue" : "orange"}>
+                            {timeline.canceled ? "İptal edildi" : ORDER_STATUS_BADGE[timeline.currentKey]}
+                          </Badge>
+                          <Badge size="2xsmall" color={ship.color}>{ship.label}</Badge>
+                          {labelPrintedAt(order) ? <Badge size="2xsmall" color="green">Etiket yazdırıldı</Badge> : null}
+                        </div>
+                        <span className="txt-compact-small text-ui-fg-subtle">
+                          {formatDate(order.created_at)}
+                          {order.shipping_address?.city ? `, ${order.shipping_address.city}` : ""}
+                        </span>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+              <table className="w-full min-w-[640px] text-left max-sm:hidden">
                 <thead>
                   <tr className="border-b text-ui-fg-subtle">
                     <th className="w-10 px-6 py-2">
@@ -603,6 +638,7 @@ const OrderBulkLabelsWidget = () => {
                   })}
                 </tbody>
               </table>
+              </>
             )}
           </div>
         </>

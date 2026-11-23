@@ -51,13 +51,28 @@ export const OPS_KIND_LABEL: Record<string, string> = {
 export const OPS_KIND_ACTION: Record<string, string> = {
   "payment.alert": "Müşteriden para çekildi ama sipariş düzgün oluşmadı. Teknik sorumluya haber verin; para PayTR panelinden iade edilir ya da sipariş elle açılır.",
   "shipment.failed": "Siparişi açın; sebep giderilince Gönderi aç düğmesine basın.",
-  "shipment.audit": "Siparişi açıp gönderiyi açın ya da durumunu düzeltin.",
   "shipment.problem": "Kargo firmasıyla görüşün; gecikme varsa müşteriye haber verin.",
   "return.code_failed": "İadeyi açıp kodu kargo firmasından alın ya da elle yazıp gönderin.",
   "return.refund_failed": "İadeyi açıp Para iadesini tekrar dene düğmesine basın. Yine olmazsa teknik sorumluya haber verin.",
-  "exchange.failed": "Değişimi açıp Yeni ürünü gönder düğmesine basın.",
+  "exchange.failed": "Değişimi açın; hata orada yazar. İade teslim alınmadıysa önce teslim alın, sonra Yeni ürünü gönder düğmesine basın.",
   "invoice.failed": "Siparişin Fatura kartından yeniden gönderin.",
   "invoice.refund_manual": "İade faturasını BizimHesap'tan elle kesin.",
+}
+
+/** Kargo denetimi bulguları ayrı işler ister: başlıktaki bulgu türüne göre. */
+const AUDIT_ACTIONS: [RegExp, string][] = [
+  [/kargo kaydı yok/i, "Sipariş sayfasındaki Gönderi aç düğmesine basın."],
+  [/kargoya verilmedi/i, "Paket hâlâ depodaysa kargoya verin. Verildiyse kargo firmasına sorun."],
+  [/teslim edilmedi/i, "Kargo firmasını arayıp paketin nerede olduğunu sorun; gecikme varsa müşteriye haber verin."],
+  [/iptal siparişte açık gönderi/i, "Kargo firmasında bu gönderiyi iptal edin."],
+  [/aynı gönderi/i, "Teknik sorumluya haber verin."],
+]
+
+/** Bu olay için personelin yapacağı iş (yoksa null). Yalnız uyarı ve hatalarda. */
+export function opsEventAction(e: Pick<OpsEvent, "kind" | "level" | "title">): string | null {
+  if (e.level === "info") return null
+  if (e.kind === "shipment.audit") return AUDIT_ACTIONS.find(([re]) => re.test(e.title))?.[1] ?? null
+  return OPS_KIND_ACTION[e.kind] ?? null
 }
 
 const TL = new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" })

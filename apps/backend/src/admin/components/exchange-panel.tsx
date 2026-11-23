@@ -4,7 +4,7 @@ import { useState } from "react"
 import { formatDateTime } from "../lib/dates"
 import { InlineConfirm, type ConfirmSpec } from "./inline-confirm"
 
-import { exchangeDisplayState, readExchange, type ExchangeMeta } from "../../lib/exchange-plan"
+import { EXCHANGE_NOTHING_ACCEPTED, exchangeDisplayState, readExchange, type ExchangeMeta } from "../../lib/exchange-plan"
 import { ExchangeForm, EXCHANGE_STATE_BADGE, postJson, type ExchangeFormLine } from "./exchange-form"
 import { printExchangeLabels, skippedLabelsMessage } from "../lib/print-labels"
 
@@ -217,9 +217,15 @@ export const ExchangePanel = ({
                 </Text>
               ))}
               {tracking ? <Text size="small" className="text-ui-fg-subtle">Yeni ürün takip no: {tracking}</Text> : null}
-              {state === "failed" ? <Text size="small" className="text-ui-fg-error">{ex.error}</Text> : null}
+              {state === "failed" ? (
+                <Text size="small" className="text-ui-fg-error">
+                  {ex.error === EXCHANGE_NOTHING_ACCEPTED
+                    ? "Önce iade teslim alınmalı. Yukarıdaki Paket geldi düğmesinden teslim alın; yeni ürün ondan sonra gönderilir."
+                    : ex.error}
+                </Text>
+              ) : null}
               <div className="flex flex-wrap gap-2">
-                {state === "to_ship" || state === "failed" ? (
+                {(state === "to_ship" || state === "failed") && ex.error !== EXCHANGE_NOTHING_ACCEPTED ? (
                   <Button
                     size="small"
                     variant="primary"

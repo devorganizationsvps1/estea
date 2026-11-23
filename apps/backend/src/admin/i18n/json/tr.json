@@ -159,7 +159,7 @@
       "status": {
         "notFulfilled": "Gönderi yok",
         "partiallyFulfilled": "Kısmen hazır",
-        "fulfilled": "Etiket hazır",
+        "fulfilled": "Kargoya verilecek",
         "partiallyShipped": "Kısmen kargoda",
         "shipped": "Kargoda",
         "delivered": "Teslim edildi",

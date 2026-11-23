@@ -86,6 +86,37 @@ const ReturnsPage = () => {
   const rootRef = useRef<HTMLDivElement>(null)
   useScrollRestore("returns", rootRef, !isLoading)
 
+  // Durum hücresi: masaüstü tablosu ve telefon kartı aynı içeriği kullanır.
+  const statusOf = (r: AdminReturn) => {
+    const st = STATE[r.state]
+    return (
+      <>
+                    <Badge size="2xsmall" color={st.color}>
+                      {r.state === "problem" && r.manual_required ? "Elle iade gerekli (havale)" : st.label}
+                    </Badge>
+                    {r.exchange ? (
+                      <Badge size="2xsmall" color="blue" className="ml-1">Değişim</Badge>
+                    ) : null}
+                    {r.state === "refunded" && r.refund_amount != null ? (
+                      <div className="txt-compact-small text-ui-fg-subtle">{formatTL(r.refund_amount)}</div>
+                    ) : null}
+                    {r.state === "problem" && !r.manual_required && r.refund_error ? (
+                      <div className="txt-compact-small text-ui-fg-error">{r.refund_error}</div>
+                    ) : null}
+                    {r.state === "open" ? (
+                      r.return_code ? (
+                        <div className={`txt-compact-small ${r.return_code_sent === false ? "text-ui-fg-error" : "text-ui-fg-subtle"}`}>
+                          İade kodu: {r.return_code}
+                          {r.return_code_sent === false ? ", müşteriye gönderilemedi" : ""}
+                        </div>
+                      ) : (
+                        <div className="txt-compact-small text-ui-fg-error">İade kodu gönderilmedi</div>
+                      )
+                    ) : null}
+      </>
+    )
+  }
+
   return (
     <Container ref={rootRef} className="divide-y p-0">
       <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4">
@@ -121,7 +152,29 @@ const ReturnsPage = () => {
       ) : rows.length === 0 ? (
         <Text size="small" className="px-6 py-4 text-ui-fg-subtle">Bu durumda iade yok.</Text>
       ) : (
-        <div className="overflow-x-auto">
+        <>
+        {/* Telefonda tablo yerine satır kartı: sipariş no ve durum üstte, hiçbir şey ekran dışında kalmaz. */}
+        <ul className="m-0 list-none divide-y p-0 sm:hidden">
+          {rows.map((r) => (
+            <li key={r.id}>
+              <Link to={`/iadeler/${r.id}`} className="flex flex-col gap-1 px-6 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="txt-compact-small-plus text-ui-fg-interactive">
+                    #{r.order_display_id ?? r.order_id?.slice(-6) ?? "—"} {r.customer}
+                  </span>
+                  <span className="txt-compact-small text-ui-fg-subtle">{formatEventDate(r.created_at)}</span>
+                </div>
+                <div>{statusOf(r)}</div>
+                {r.items.map((it, i) => (
+                  <div key={i} className="txt-compact-small text-ui-fg-subtle">
+                    {it.quantity} × {it.title}
+                  </div>
+                ))}
+              </Link>
+            </li>
+          ))}
+        </ul>
+        <div className="overflow-x-auto max-sm:hidden">
         <Table>
           <Table.Header>
             <Table.Row>
@@ -134,7 +187,6 @@ const ReturnsPage = () => {
           </Table.Header>
           <Table.Body>
             {rows.map((r) => {
-              const st = STATE[r.state]
               return (
                 <Table.Row
                   key={r.id}
@@ -173,36 +225,14 @@ const ReturnsPage = () => {
                       <div className="txt-compact-small text-ui-fg-subtle">Not: {r.customer_note}</div>
                     ) : null}
                   </Table.Cell>
-                  <Table.Cell>
-                    <Badge size="2xsmall" color={st.color}>
-                      {r.state === "problem" && r.manual_required ? "Elle iade gerekli (havale)" : st.label}
-                    </Badge>
-                    {r.exchange ? (
-                      <Badge size="2xsmall" color="blue" className="ml-1">Değişim</Badge>
-                    ) : null}
-                    {r.state === "refunded" && r.refund_amount != null ? (
-                      <div className="txt-compact-small text-ui-fg-subtle">{formatTL(r.refund_amount)}</div>
-                    ) : null}
-                    {r.state === "problem" && !r.manual_required && r.refund_error ? (
-                      <div className="txt-compact-small text-ui-fg-error">{r.refund_error}</div>
-                    ) : null}
-                    {r.state === "open" ? (
-                      r.return_code ? (
-                        <div className={`txt-compact-small ${r.return_code_sent === false ? "text-ui-fg-error" : "text-ui-fg-subtle"}`}>
-                          İade kodu: {r.return_code}
-                          {r.return_code_sent === false ? ", müşteriye gönderilemedi" : ""}
-                        </div>
-                      ) : (
-                        <div className="txt-compact-small text-ui-fg-error">İade kodu gönderilmedi</div>
-                      )
-                    ) : null}
-                  </Table.Cell>
+                  <Table.Cell>{statusOf(r)}</Table.Cell>
                 </Table.Row>
               )
             })}
           </Table.Body>
         </Table>
         </div>
+        </>
       )}
     </Container>
   )

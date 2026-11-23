@@ -7,6 +7,7 @@ import { InlineConfirm, type ConfirmSpec } from "../../components/inline-confirm
 import { Link, useNavigate } from "react-router-dom"
 
 import { EXCHANGE_STATE_BADGE, postJson } from "../../components/exchange-form"
+import { EXCHANGE_NOTHING_ACCEPTED } from "../../../lib/exchange-plan"
 import { formatEventDate } from "../../lib/ops-events"
 import { usePersistedState, useScrollRestore } from "../../lib/persisted-state"
 import { printExchangeLabels, skippedLabelsMessage } from "../../lib/print-labels"
@@ -105,13 +106,54 @@ const ExchangesPage = () => {
     }
   }
 
+  // Durum ve eylem hücreleri: masaüstü tablosu ve telefon kartı aynı içeriği kullanır.
+  const statusOf = (r: Row) => {
+    const st = EXCHANGE_STATE_BADGE[r.state]
+    return (
+      <>
+                    <Badge size="2xsmall" color={st.color}>{st.label}</Badge>
+                    {r.state === "awaiting_return" ? (
+                      <div className={`txt-compact-small ${r.return_code && r.return_code_sent !== false ? "text-ui-fg-subtle" : "text-ui-fg-error"}`}>
+                        {r.return_code
+                          ? `İade kodu: ${r.return_code}${r.return_code_sent === false ? ", müşteriye gönderilemedi" : ""}`
+                          : "İade kodu gönderilmedi"}
+                      </div>
+                    ) : null}
+                    {r.shipment?.tracking_number ? (
+                      <div className="txt-compact-small text-ui-fg-subtle">Takip: {r.shipment.tracking_number}</div>
+                    ) : null}
+                    {r.label_printed_at ? (
+                      <div className="txt-compact-small text-ui-fg-subtle">Etiket {formatEventDate(r.label_printed_at)} tarihinde yazdırıldı</div>
+                    ) : null}
+                    {r.error === EXCHANGE_NOTHING_ACCEPTED ? (
+                      <div className="txt-compact-small text-ui-fg-error">Önce iade teslim alınmalı. Değişimi açıp Paket geldi düğmesinden teslim alın.</div>
+                    ) : r.error ? (
+                      <div className="txt-compact-small text-ui-fg-error">{r.error}</div>
+                    ) : null}
+      </>
+    )
+  }
+  const actionOf = (r: Row) => (
+    <>
+                    {r.state === "label_ready" ? (
+                      <Button size="small" variant="secondary" disabled={busy !== null} onClick={() => print([r.key], true)}>
+                        Etiket
+                      </Button>
+                    ) : (r.state === "to_ship" || r.state === "failed") && r.kind === "medusa" && r.error !== EXCHANGE_NOTHING_ACCEPTED ? (
+                      <Button size="small" variant="secondary" isLoading={busy === `ship:${r.key}`} disabled={busy !== null} onClick={() => askShip(r)}>
+                        Yeni ürünü gönder
+                      </Button>
+                    ) : null}
+    </>
+  )
+
   return (
     <Container ref={rootRef} className="divide-y p-0">
       <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4">
         <div>
           <Heading level="h1">Değişimler</Heading>
           <Text size="small" className="text-ui-fg-subtle">
-            Ürün gelince siparişi açıp teslim alın; yeni ürünün gönderisi açılır ve etiketi buradan basılır. Değişimde para
+            Ürün gelince değişimi açıp Paket geldi düğmesinden teslim alın; yeni ürünün gönderisi açılır ve etiketi buradan basılır. Değişimde para
             iadesi yapılmaz.
           </Text>
         </div>
@@ -151,7 +193,30 @@ const ExchangesPage = () => {
             <InlineConfirm spec={confirm} onClose={() => setConfirm(null)} />
           </div>
         ) : null}
-        <div className="overflow-x-auto">
+        <ul className="m-0 list-none divide-y p-0 sm:hidden">
+          {rows.map((r) => (
+            <li key={r.key} className="flex flex-col gap-2 px-6 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Link
+                  to={r.return_id ? `/degisimler/${r.return_id}` : r.order_link}
+                  className="txt-compact-small-plus inline-flex min-h-[40px] items-center text-ui-fg-interactive"
+                >
+                  {r.order_label} {r.customer}
+                </Link>
+                <span className="txt-compact-small text-ui-fg-subtle">{formatEventDate(r.requested_at)}</span>
+              </div>
+              <div>{statusOf(r)}</div>
+              {r.items.map((it, i) => (
+                <div key={i} className="txt-compact-small text-ui-fg-subtle">
+                  {it.quantity} × {it.title}
+                  {it.from ? ` ${it.from}` : ""} → {it.to || "?"}
+                </div>
+              ))}
+              <div className="empty:hidden">{actionOf(r)}</div>
+            </li>
+          ))}
+        </ul>
+        <div className="overflow-x-auto max-sm:hidden">
         <Table>
           <Table.Header>
             <Table.Row>
@@ -173,7 +238,6 @@ const ExchangesPage = () => {
           </Table.Header>
           <Table.Body>
             {rows.map((r) => {
-              const st = EXCHANGE_STATE_BADGE[r.state]
               return (
                 <Table.Row
                   key={r.key}
@@ -221,34 +285,8 @@ const ExchangesPage = () => {
                       </div>
                     ))}
                   </Table.Cell>
-                  <Table.Cell>
-                    <Badge size="2xsmall" color={st.color}>{st.label}</Badge>
-                    {r.state === "awaiting_return" ? (
-                      <div className={`txt-compact-small ${r.return_code && r.return_code_sent !== false ? "text-ui-fg-subtle" : "text-ui-fg-error"}`}>
-                        {r.return_code
-                          ? `İade kodu: ${r.return_code}${r.return_code_sent === false ? ", müşteriye gönderilemedi" : ""}`
-                          : "İade kodu gönderilmedi"}
-                      </div>
-                    ) : null}
-                    {r.shipment?.tracking_number ? (
-                      <div className="txt-compact-small text-ui-fg-subtle">Takip: {r.shipment.tracking_number}</div>
-                    ) : null}
-                    {r.label_printed_at ? (
-                      <div className="txt-compact-small text-ui-fg-subtle">Etiket {formatEventDate(r.label_printed_at)} tarihinde yazdırıldı</div>
-                    ) : null}
-                    {r.error ? <div className="txt-compact-small text-ui-fg-error">{r.error}</div> : null}
-                  </Table.Cell>
-                  <Table.Cell>
-                    {r.state === "label_ready" ? (
-                      <Button size="small" variant="secondary" disabled={busy !== null} onClick={() => print([r.key], true)}>
-                        Etiket
-                      </Button>
-                    ) : (r.state === "to_ship" || r.state === "failed") && r.kind === "medusa" ? (
-                      <Button size="small" variant="secondary" isLoading={busy === `ship:${r.key}`} disabled={busy !== null} onClick={() => askShip(r)}>
-                        Yeni ürünü gönder
-                      </Button>
-                    ) : null}
-                  </Table.Cell>
+                  <Table.Cell>{statusOf(r)}</Table.Cell>
+                  <Table.Cell>{actionOf(r)}</Table.Cell>
                 </Table.Row>
               )
             })}

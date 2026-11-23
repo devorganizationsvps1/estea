@@ -69,7 +69,7 @@ const PATCHES = [
 // ESCAY_PRESETS'e ["bank","Havale bekleyenler",["requires_action"],[]] geri eklenir.
 const FILTER_BAR = `
 var ESCAY_PAYMENT = ${JSON.stringify([["captured","Alındı"],["awaiting","Bekleniyor"],["requires_action","Havale onayı bekleniyor"],["not_paid","Ödenmedi"],["authorized","Yetkilendirildi"],["partially_refunded","Kısmen iade edildi"],["refunded","İade edildi"],["canceled","İptal edildi"]])};
-var ESCAY_SHIPPING = ${JSON.stringify([["not_fulfilled","Gönderi yok"],["fulfilled","Etiket hazır"],["shipped","Kargoda"],["delivered","Teslim edildi"],["partially_fulfilled","Kısmen hazır"],["partially_shipped","Kısmen kargoda"],["canceled","İptal"]])};
+var ESCAY_SHIPPING = ${JSON.stringify([["not_fulfilled","Gönderi yok"],["fulfilled","Kargoya verilecek"],["shipped","Kargoda"],["delivered","Teslim edildi"],["partially_fulfilled","Kısmen hazır"],["partially_shipped","Kısmen kargoda"],["canceled","İptal"]])};
 var ESCAY_PRESETS = ${JSON.stringify([["to_ship","Kargolanacaklar",["captured"],["not_fulfilled","fulfilled"]],["in_transit","Kargoda",[],["shipped"]],["canceled","İptaller",["canceled"],[]]])};
 var EscayOrderStatusFilters = () => {
   const [params, setParams] = useSearchParams();

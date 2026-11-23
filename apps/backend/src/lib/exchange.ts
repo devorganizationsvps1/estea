@@ -20,6 +20,7 @@ import {
   type ExchangeItem,
   type ExchangeMeta,
   type VariantChoice,
+  EXCHANGE_NOTHING_ACCEPTED,
 } from "./exchange-plan"
 import { errorText, recordOpsEvent } from "./ops-events"
 import { processReturnRefund } from "./return-refund"
@@ -324,7 +325,7 @@ async function shipUnlocked(
   }
 
   const plan = planExchangeShipment(exchange, ret.items || [], ret.status)
-  if (!plan.length) return fail("Kabul edilen ürün yok — gönderilecek yeni ürün yok.")
+  if (!plan.length) return fail(EXCHANGE_NOTHING_ACCEPTED)
 
   // 1) Yeni kalemler (bir kez). Önceki denemede eklendiyse tekrar eklenmez.
   let newItemIds = exchange.new_item_ids || []

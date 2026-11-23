@@ -3,7 +3,7 @@ import { Badge, Button, Container, Heading, Text } from "@medusajs/ui"
 import { useQuery } from "@tanstack/react-query"
 import { useState } from "react"
 import { useParams } from "react-router-dom"
-import { fetchOpsEvents, formatEventDate, OPS_KIND_ACTION, OPS_KIND_LABEL, OPS_LEVEL_BADGE, tidyEventText } from "../lib/ops-events"
+import { fetchOpsEvents, formatEventDate, groupEvents, opsEventAction, OPS_KIND_LABEL, OPS_LEVEL_BADGE, tidyEventText } from "../lib/ops-events"
 
 /**
  * Sipariş detayı — bu siparişin olayları (sağ sütun). Medusa'nın Aktivite kartının
@@ -20,7 +20,10 @@ const OrderOpsWidget = () => {
     queryFn: () => fetchOpsEvents({ order_id: orderId, limit: 20 }),
   })
 
-  const list = events.data?.events || []
+  // Her gün yinelenen aynı uyarı (kargo denetimi) tek satır: en yenisi ve kaç kez olduğu.
+  const groups = groupEvents(events.data?.events || [])
+  const list = groups.map((g) => g.first)
+  const repeats = new Map(groups.map((g) => [g.first.id, g.count]))
   if (!orderId || list.length === 0) return null
   // Son 5 olay; ayrıntı metni yalnız uyarı/hata olaylarında görünür.
   const shown = all ? list : list.slice(0, 5)
@@ -34,19 +37,20 @@ const OrderOpsWidget = () => {
           <div key={e.id} className="flex flex-col gap-0.5 border-b border-ui-border-base pb-2 last:border-b-0">
             <div className="flex items-center gap-2">
               <Badge size="2xsmall" color={badge.color}>{OPS_KIND_LABEL[e.kind] || e.kind}</Badge>
-              <Text size="xsmall" className="text-ui-fg-subtle">{formatEventDate(e.created_at)}</Text>
+              <Text size="xsmall" className="text-ui-fg-subtle">
+                {formatEventDate(e.created_at)}
+                {(repeats.get(e.id) || 1) > 1 ? `, ${repeats.get(e.id)} kez` : ""}
+              </Text>
             </div>
             <Text size="small">{tidyEventText(e.title)}</Text>
-            {e.level !== "info" && OPS_KIND_ACTION[e.kind] ? (
-              <Text size="small" className="text-ui-fg-subtle">{OPS_KIND_ACTION[e.kind]}</Text>
-            ) : null}
-            {e.detail && (all || (e.level !== "info" && !OPS_KIND_ACTION[e.kind])) ? (
+            {opsEventAction(e) ? <Text size="small" className="text-ui-fg-subtle">{opsEventAction(e)}</Text> : null}
+            {e.detail && (all || (e.level !== "info" && !opsEventAction(e))) ? (
               <Text size="xsmall" className="text-ui-fg-subtle whitespace-pre-wrap break-words">{tidyEventText(e.detail)}</Text>
             ) : null}
           </div>
         )
       })}
-      {list.length > 5 || list.some((e) => e.detail && (e.level === "info" || OPS_KIND_ACTION[e.kind])) ? (
+      {list.length > 5 || list.some((e) => e.detail && (e.level === "info" || opsEventAction(e))) ? (
         <div>
           <Button size="small" variant="transparent" onClick={() => setAll((v) => !v)}>
             {all ? "Daha az göster" : list.length > 5 ? `Önceki ${list.length - 5} olayı da göster` : "Ayrıntıları göster"}

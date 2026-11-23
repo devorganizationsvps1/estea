@@ -81,8 +81,16 @@ html:root:not(.dark) {
 
 html:not(.dark), html:not(.dark) body { background: #ffffff; }
 
-html .font-sans, html body {
+/* Medusa bileşenleri (tablo hücresi, düğme, giriş) kendi Inter kuralını taşır; panel tek
+   yazı tipiyle çizilsin diye hepsi kapsanır. Kod / takip no gibi font-mono alanlar hariç. */
+html .font-sans, html body,
+html :is(td, th, button, input, select, textarea, summary, p, span, label, a, div):not(.font-mono):not(.font-mono *) {
   font-family: Figtree, Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Telefonda düğmeler parmakla basılacak yükseklikte (Medusa küçük düğmesi 28 px). */
+@media (max-width: 640px) {
+  html main button.txt-compact-small-plus { min-height: 40px; }
 }
 
 /* 13 px uzun oturumda yorar. */

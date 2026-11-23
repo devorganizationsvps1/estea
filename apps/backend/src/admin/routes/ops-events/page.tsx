@@ -4,7 +4,7 @@ import { Badge, Button, Container, Heading, Select, Table, Text } from "@medusaj
 import { useQuery } from "@tanstack/react-query"
 import { useEffect, useRef } from "react"
 import { Link } from "react-router-dom"
-import { fetchOpsEvents, formatEventDate, groupEvents, OPS_KIND_ACTION, OPS_KIND_LABEL, OPS_LEVEL_BADGE, tidyEventText } from "../../lib/ops-events"
+import { fetchOpsEvents, formatEventDate, groupEvents, opsEventAction, OPS_KIND_LABEL, OPS_LEVEL_BADGE, tidyEventText } from "../../lib/ops-events"
 import { useNavBadges } from "../../components/nav-badges"
 import { usePersistedState, useScrollRestore } from "../../lib/persisted-state"
 const MAX_ORDER_LINKS = 6
@@ -147,15 +147,13 @@ const OpsEventsPage = () => {
                   <Table.Cell className="max-w-[520px] py-2">
                     <div className="txt-compact-small-plus">{tidyEventText(n > 1 ? title : e.title)}</div>
                     {/* Önce ne yapılacağı; ham kayıt isteyene açılımda. */}
-                    {e.level !== "info" && OPS_KIND_ACTION[e.kind] ? (
-                      <div className="txt-compact-small">{OPS_KIND_ACTION[e.kind]}</div>
-                    ) : null}
+                    {opsEventAction(e) ? <div className="txt-compact-small">{opsEventAction(e)}</div> : null}
                     {n > 1 && orders.length > 1 ? (
                       <div className="txt-compact-small text-ui-fg-subtle">
                         {orders.length} sipariş. Her siparişin kaydı kendi sayfasındaki Olaylar kutusunda.
                       </div>
                     ) : e.detail ? (
-                      e.level !== "info" && OPS_KIND_ACTION[e.kind] ? (
+                      opsEventAction(e) ? (
                         <details className="txt-compact-small text-ui-fg-subtle">
                           <summary className="cursor-pointer py-1">Teknik ayrıntı</summary>
                           <div className="whitespace-pre-wrap break-words">{tidyEventText(e.detail)}</div>

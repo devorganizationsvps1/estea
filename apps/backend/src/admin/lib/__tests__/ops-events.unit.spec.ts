@@ -1,4 +1,4 @@
-import { eventGroupTitle, groupEvents, tidyEventText, type OpsEvent } from "../ops-events"
+import { eventGroupTitle, groupEvents, opsEventAction, tidyEventText, type OpsEvent } from "../ops-events"
 import { formatTL } from "../money"
 
 const ev = (id: string, title: string, order?: number, extra: Partial<OpsEvent> = {}): OpsEvent =>
@@ -43,5 +43,21 @@ describe("olay metni panelin tutar ve tarih biçiminde", () => {
     expect(tidyEventText("PayTR iadesi başarısız (1800.00 TL)")).toBe(`PayTR iadesi başarısız (${formatTL(1800)})`)
     expect(tidyEventText("Ödendi ama kargo kaydı yok: #80 · 2026-11-22")).toBe("Ödendi ama kargo kaydı yok: #80, 22.11.2026")
     expect(tidyEventText("Takip no: 565721832746")).toBe("Takip no: 565721832746")
+  })
+})
+
+describe("olay başına yapılacak iş", () => {
+  const audit = (title: string) => opsEventAction({ kind: "shipment.audit", level: "warning", title })
+
+  it("kargo denetimi bulgusuna göre ayrı iş söyler", () => {
+    expect(audit("Ödendi ama kargo kaydı yok: #80 · 2026-11-22")).toMatch(/Gönderi aç/)
+    expect(audit("6 gündür kargoya verilmedi: #22 · 2026-11-22")).toMatch(/kargoya verin/)
+    expect(audit("10 gündür teslim edilmedi: #76 · 2026-11-22")).toMatch(/Kargo firmasını arayıp/)
+    expect(audit("10 gündür teslim edilmedi: #76")).not.toMatch(/Gönderi aç/)
+  })
+
+  it("bilgi satırında ve tanımsız türde iş yok", () => {
+    expect(opsEventAction({ kind: "shipment.audit", level: "info", title: "Kargo denetimi: 8 bulgu" })).toBeNull()
+    expect(opsEventAction({ kind: "payment.succeeded", level: "warning", title: "x" })).toBeNull()
   })
 })
