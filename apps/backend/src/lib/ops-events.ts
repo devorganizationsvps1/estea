@@ -55,13 +55,21 @@ export type OpsEventKind =
 export const SYSTEM_EVENT_KINDS: OpsEventKind[] = ["contract.failed", "carrier.health", "stock.sync", "mail.failed"]
 
 /**
+ * Rutin uyarılar: kimsenin bir şey yapması gerekmez (müşteri ödemeyi tamamlamadı, kart
+ * reddedildi ve yeniden deneyebilir). "Hata ve uyarı" görünümünde yer almaz; "Hepsi"nde durur.
+ */
+export const ROUTINE_EVENT_KINDS: OpsEventKind[] = ["order.canceled_unpaid", "payment.failed"]
+
+/**
  * Olay kaydı tür filtresi: "system" → yalnız teknik olaylar; "payment" gibi önek → o
  * türler; boş → teknik olaylar hariç hepsi.
  */
-export function opsKindFilter(kind: string | undefined): unknown {
+export function opsKindFilter(kind: string | undefined, opts: { importantOnly?: boolean } = {}): unknown {
   if (kind === "system") return SYSTEM_EVENT_KINDS
-  if (!kind) return { $nin: SYSTEM_EVENT_KINDS }
-  return kind.includes(".") ? kind : { $like: `${kind}.%` }
+  const routine = opts.importantOnly ? ROUTINE_EVENT_KINDS : []
+  if (!kind) return { $nin: [...SYSTEM_EVENT_KINDS, ...routine] }
+  if (kind.includes(".")) return kind
+  return routine.length ? { $like: `${kind}.%`, $nin: routine } : { $like: `${kind}.%` }
 }
 
 export type OpsEventInput = {

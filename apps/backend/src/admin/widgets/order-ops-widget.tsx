@@ -3,7 +3,7 @@ import { Badge, Button, Container, Heading, Text } from "@medusajs/ui"
 import { useQuery } from "@tanstack/react-query"
 import { useState } from "react"
 import { useParams } from "react-router-dom"
-import { fetchOpsEvents, formatEventDate, OPS_KIND_LABEL, OPS_LEVEL_BADGE } from "../lib/ops-events"
+import { fetchOpsEvents, formatEventDate, OPS_KIND_ACTION, OPS_KIND_LABEL, OPS_LEVEL_BADGE, tidyEventText } from "../lib/ops-events"
 
 /**
  * Sipariş detayı — bu siparişin olayları (sağ sütun). Medusa'nın Aktivite kartının
@@ -36,14 +36,17 @@ const OrderOpsWidget = () => {
               <Badge size="2xsmall" color={badge.color}>{OPS_KIND_LABEL[e.kind] || e.kind}</Badge>
               <Text size="xsmall" className="text-ui-fg-subtle">{formatEventDate(e.created_at)}</Text>
             </div>
-            <Text size="small">{e.title}</Text>
-            {e.detail && (all || e.level !== "info") ? (
-              <Text size="xsmall" className="text-ui-fg-subtle whitespace-pre-wrap">{e.detail}</Text>
+            <Text size="small">{tidyEventText(e.title)}</Text>
+            {e.level !== "info" && OPS_KIND_ACTION[e.kind] ? (
+              <Text size="small" className="text-ui-fg-subtle">{OPS_KIND_ACTION[e.kind]}</Text>
+            ) : null}
+            {e.detail && (all || (e.level !== "info" && !OPS_KIND_ACTION[e.kind])) ? (
+              <Text size="xsmall" className="text-ui-fg-subtle whitespace-pre-wrap break-words">{tidyEventText(e.detail)}</Text>
             ) : null}
           </div>
         )
       })}
-      {list.length > 5 || list.some((e) => e.detail && e.level === "info") ? (
+      {list.length > 5 || list.some((e) => e.detail && (e.level === "info" || OPS_KIND_ACTION[e.kind])) ? (
         <div>
           <Button size="small" variant="transparent" onClick={() => setAll((v) => !v)}>
             {all ? "Daha az göster" : list.length > 5 ? `Önceki ${list.length - 5} olayı da göster` : "Ayrıntıları göster"}

@@ -3,6 +3,7 @@ import { Badge, Button, Container, Heading, Input, Text, toast } from "@medusajs
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
 import { useParams } from "react-router-dom"
+import { InlineConfirm, type ConfirmSpec } from "../components/inline-confirm"
 
 type LocationLevel = {
   id: string
@@ -51,6 +52,7 @@ const VariantStockWidget = () => {
   const inventoryPageItemId = variantId ? undefined : params.id
   const qc = useQueryClient()
   const [amounts, setAmounts] = useState<Record<string, string>>({})
+  const [confirm, setConfirm] = useState<{ key: string; spec: ConfirmSpec } | null>(null)
 
   const variantQ = useQuery({
     queryKey: ["escay-variant-stock", productId, variantId],
@@ -125,10 +127,25 @@ const VariantStockWidget = () => {
       toast.error(`Stok eksiye düşemez (mevcut ${current}).`)
       return
     }
-    if (next < (Number(level.reserved_quantity) || 0)) {
-      toast.warning(`Dikkat: ${level.reserved_quantity} adet ödeme/kargo bekleyen siparişlere ayrılmış.`)
+    const reserved = Number(level.reserved_quantity) || 0
+    const run = () => update.mutate({ itemId: item.id, locationId: level.location_id, stocked: next })
+    // Eşitleme mevcut sayıyı ezer (ekle / çıkar gibi geri alınması kolay değil): onay ister.
+    if (mode === "set") {
+      setConfirm({
+        key,
+        spec: {
+          text: `${locationName(level.location_id)} stoğu ${current} adetten ${next} adede çekilir. Mağazada satılabilir adet buna göre değişir.`,
+          lines: next < reserved ? [`Dikkat: ${reserved} adet ödeme ya da kargo bekleyen siparişlere ayrılmış.`] : undefined,
+          confirmLabel: `Stoğu ${next} yap`,
+          onConfirm: run,
+        },
+      })
+      return
     }
-    update.mutate({ itemId: item.id, locationId: level.location_id, stocked: next })
+    if (next < reserved) {
+      toast.warning(`Dikkat: ${reserved} adet ödeme/kargo bekleyen siparişlere ayrılmış.`)
+    }
+    run()
   }
 
   return (
@@ -196,6 +213,9 @@ const VariantStockWidget = () => {
                     <Button size="small" variant="secondary" isLoading={update.isPending} onClick={() => apply(item, level, "set")}>
                       Stoğu bu sayıya eşitle
                     </Button>
+                    <div className="basis-full empty:hidden">
+                      <InlineConfirm spec={confirm?.key === key ? confirm.spec : null} onClose={() => setConfirm(null)} />
+                    </div>
                   </div>
                 )
               })

@@ -225,7 +225,18 @@ export const ExchangePanel = ({
                     variant="primary"
                     isLoading={busy === `ship:${r.id}`}
                     disabled={busy !== null}
-                    onClick={() => run(`ship:${r.id}`, () => postJson(`/admin/returns/${r.id}/exchange/ship`), "Yeni ürünün gönderisi açıldı")}
+                    onClick={() =>
+                      setPending({
+                        id: r.id,
+                        spec: {
+                          text: "Yeni ürün için kargo gönderisi açılır ve etiket oluşturulur (kargo ücreti doğar). Stoktan düşer.",
+                          lines: ex.items.map((it) => `${it.quantity} × ${it.title} ${it.to_variant || ""}`.trim()),
+                          confirmLabel: "Gönderiyi aç",
+                          onConfirm: () =>
+                            void run(`ship:${r.id}`, () => postJson(`/admin/returns/${r.id}/exchange/ship`), "Yeni ürünün gönderisi açıldı"),
+                        },
+                      })
+                    }
                   >
                     Yeni ürünü gönder
                   </Button>

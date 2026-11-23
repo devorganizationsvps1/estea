@@ -84,8 +84,8 @@ const OrderContractsWidget = () => {
         </Text>
       ) : meta ? (
         <>
-          <Text size="xsmall" className="text-ui-fg-subtle">
-            Müşteri onayı: {fmt(accepted)}
+          <Text size="small" className="text-ui-fg-subtle">
+            {accepted ? `Müşteri ${fmt(accepted)} tarihinde onayladı.` : "Müşteri onay tarihi kayıtlı değil."}
           </Text>
           {CONTRACTS.map((c) => (
             <a
@@ -102,7 +102,8 @@ const OrderContractsWidget = () => {
       ) : (
         <>
           <Text size="small" className="text-ui-fg-subtle">
-            PDF yok · Müşteri onayı: {fmt(accepted)}
+            Sözleşme dosyaları henüz oluşturulmadı.
+            {accepted ? ` Müşteri ${fmt(accepted)} tarihinde onayladı.` : ""}
           </Text>
           <Button
             size="small"

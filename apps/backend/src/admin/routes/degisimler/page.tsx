@@ -3,6 +3,7 @@ import { ArrowPath } from "@medusajs/icons"
 import { Badge, Button, Checkbox, Container, Heading, Table, Text, toast } from "@medusajs/ui"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useRef, useState } from "react"
+import { InlineConfirm, type ConfirmSpec } from "../../components/inline-confirm"
 import { Link, useNavigate } from "react-router-dom"
 
 import { EXCHANGE_STATE_BADGE, postJson } from "../../components/exchange-form"
@@ -49,6 +50,7 @@ const ExchangesPage = () => {
   const [filter, setFilter] = usePersistedState<string>("exchanges:filter", "open")
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState<string | null>(null)
+  const [confirm, setConfirm] = useState<ConfirmSpec | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
 
   const { data, isLoading, refetch, isFetching } = useQuery({
@@ -82,6 +84,13 @@ const ExchangesPage = () => {
       setBusy(null)
     }
   }
+  const askShip = (r: Row) =>
+    setConfirm({
+      text: `${r.order_label} için yeni ürünün kargo gönderisi açılır ve etiket oluşturulur (kargo ücreti doğar). Stoktan düşer.`,
+      lines: r.items.map((it) => `${it.quantity} × ${it.title} ${it.to || ""}`.trim()),
+      confirmLabel: "Gönderiyi aç",
+      onConfirm: () => void ship(r),
+    })
   const ship = async (r: Row) => {
     if (!r.return_id) return
     setBusy(`ship:${r.key}`)
@@ -136,6 +145,12 @@ const ExchangesPage = () => {
       ) : rows.length === 0 ? (
         <Text size="small" className="px-6 py-4 text-ui-fg-subtle">Bu durumda değişim yok.</Text>
       ) : (
+        <>
+        {confirm ? (
+          <div className="px-6 py-3">
+            <InlineConfirm spec={confirm} onClose={() => setConfirm(null)} />
+          </div>
+        ) : null}
         <div className="overflow-x-auto">
         <Table>
           <Table.Header>
@@ -229,7 +244,7 @@ const ExchangesPage = () => {
                         Etiket
                       </Button>
                     ) : (r.state === "to_ship" || r.state === "failed") && r.kind === "medusa" ? (
-                      <Button size="small" variant="secondary" isLoading={busy === `ship:${r.key}`} disabled={busy !== null} onClick={() => ship(r)}>
+                      <Button size="small" variant="secondary" isLoading={busy === `ship:${r.key}`} disabled={busy !== null} onClick={() => askShip(r)}>
                         Yeni ürünü gönder
                       </Button>
                     ) : null}
@@ -240,6 +255,7 @@ const ExchangesPage = () => {
           </Table.Body>
         </Table>
         </div>
+        </>
       )}
     </Container>
   )

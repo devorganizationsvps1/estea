@@ -3,6 +3,7 @@ import { ArrowPath } from "@medusajs/icons"
 import { Badge, Button, Container, Heading, Table, Text, Textarea } from "@medusajs/ui"
 import { useMutation } from "@tanstack/react-query"
 import { useState } from "react"
+import { InlineConfirm, type ConfirmSpec } from "../../components/inline-confirm"
 import { Link } from "react-router-dom"
 
 type Row = { order_reference?: string; tracking_number?: string; shipment_ref?: string; status?: "shipped" | "delivered" | "" }
@@ -65,6 +66,7 @@ const ReconcilePage = () => {
   const [text, setText] = useState("")
   const [results, setResults] = useState<Result[] | null>(null)
   const [applied, setApplied] = useState(false)
+  const [confirm, setConfirm] = useState<ConfirmSpec | null>(null)
   const rows = parseReconcileText(text)
 
   const run = useMutation({
@@ -107,12 +109,26 @@ const ReconcilePage = () => {
           variant="primary"
           isLoading={run.isPending}
           disabled={!results || applied || actionable === 0}
-          onClick={() => run.mutate({ apply: true })}
+          onClick={() => {
+            const count = (a: string) => (results || []).filter((r) => r.action === a).length
+            setConfirm({
+              text: "Aşağıdaki değişiklikler siparişlere işlenir. Geri alınamaz.",
+              lines: [
+                count("attach") ? `${count("attach")} siparişe takip numarası bağlanır (firma durumu yazdıysa kargo ya da teslim de işlenir, mail gider)` : "",
+                count("ship") ? `${count("ship")} sipariş Kargoya verildi olur (müşteriye kargo maili gider)` : "",
+                count("deliver") ? `${count("deliver")} sipariş Teslim edildi olur (müşteriye teslim maili gider, fatura kesilir)` : "",
+              ].filter(Boolean),
+              confirmLabel: `${actionable} satırı uygula`,
+              onConfirm: () => run.mutate({ apply: true }),
+            })
+          }}
         >
           Uygula ({actionable})
         </Button>
         {run.error ? <Text size="small" className="text-ui-fg-error">{(run.error as Error).message}</Text> : null}
       </div>
+
+      <InlineConfirm spec={confirm} onClose={() => setConfirm(null)} />
 
       {results ? (
         <div className="overflow-x-auto">

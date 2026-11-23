@@ -245,6 +245,25 @@ const OrderStatusWidget = () => {
     }
   }
 
+  // Elle işaretleme: kargo / teslim müşteriye mail atar, teslim faturayı da keser. Onaysız çalışmaz.
+  const STEP_NAME: Record<StatusAction, string> = { prepare: "Hazırlandı", ship: "Kargoya verildi", deliver: "Teslim edildi" }
+  const mark = (action: StatusAction) => {
+    if (action === "prepare") return advanceMut.mutate(action)
+    const skipped = ACTION_ORDER.slice(ACTION_ORDER.indexOf(nextAction), ACTION_ORDER.indexOf(action)).map((a) => STEP_NAME[a])
+    setConfirm({
+      text:
+        action === "ship"
+          ? "Sipariş Kargoya verildi olur ve müşteriye kargo maili gider. Yalnız paket gerçekten kargoya verildiyse işaretleyin."
+          : "Sipariş Teslim edildi olur, müşteriye teslim maili gider ve fatura kesilir. Yalnız paket gerçekten teslim edildiyse işaretleyin.",
+      lines: [
+        ...(skipped.length ? [`Atlanan adım: ${skipped.join(", ")}`] : []),
+        ...(carrierLinked ? [`Bu sipariş ${carrierName} üzerinde; durum normalde kendiliğinden ilerler.`] : []),
+      ],
+      confirmLabel: MANUAL_LABEL[action],
+      onConfirm: () => advanceMut.mutate(action),
+    })
+  }
+
   // Ana düğmenin yaptığı adım "Diğer işlemler"de tekrar edilmez.
   const primaryAction = step.kind === "advance" ? step.action : null
   const manualActions = ACTION_ORDER.slice(ACTION_ORDER.indexOf(nextAction)).filter((a) => a !== primaryAction)
@@ -354,7 +373,7 @@ const OrderStatusWidget = () => {
         ) : null}
         {step.kind === "advance" ? (
           <>
-            <Button size="small" variant="primary" isLoading={advanceMut.isPending} disabled={busy} onClick={() => advanceMut.mutate(step.action)}>
+            <Button size="small" variant="primary" isLoading={advanceMut.isPending} disabled={busy} onClick={() => mark(step.action)}>
               {MANUAL_LABEL[step.action]}
             </Button>
             {step.action === "prepare" ? (
@@ -383,7 +402,7 @@ const OrderStatusWidget = () => {
           {trackingInMore ? trackingInputs : null}
           <div className="flex flex-wrap gap-2">
             {manualActions.map((a) => (
-              <Button key={a} size="small" variant="secondary" disabled={busy} onClick={() => advanceMut.mutate(a)}>
+              <Button key={a} size="small" variant="secondary" disabled={busy} onClick={() => mark(a)}>
                 {MANUAL_LABEL[a]}
               </Button>
             ))}

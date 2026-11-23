@@ -1,4 +1,4 @@
-import { eventGroupTitle, groupEvents, type OpsEvent } from "../ops-events"
+import { eventGroupTitle, groupEvents, tidyEventText, type OpsEvent } from "../ops-events"
 import { formatTL } from "../money"
 
 const ev = (id: string, title: string, order?: number, extra: Partial<OpsEvent> = {}): OpsEvent =>
@@ -35,5 +35,13 @@ describe("formatTL", () => {
     expect(formatTL(1849.9)).toBe("₺1.849,90")
     expect(formatTL("149.9")).toBe("₺149,90")
     expect(formatTL(null)).toBe("—")
+  })
+})
+
+describe("olay metni panelin tutar ve tarih biçiminde", () => {
+  it("düz TL ve ISO tarih çevrilir", () => {
+    expect(tidyEventText("PayTR iadesi başarısız (1800.00 TL)")).toBe(`PayTR iadesi başarısız (${formatTL(1800)})`)
+    expect(tidyEventText("Ödendi ama kargo kaydı yok: #80 · 2026-11-22")).toBe("Ödendi ama kargo kaydı yok: #80, 22.11.2026")
+    expect(tidyEventText("Takip no: 565721832746")).toBe("Takip no: 565721832746")
   })
 })

@@ -91,6 +91,20 @@ async function acceptItems(
  * "Kargo firmasından kod al / Kodu yenile". Yalnız sunucu uygun derse görünür (firma kodlu iade
  * sunuyor ve siparişte o firmanın gönderisi var); elle kargoda düğme hiç çıkmaz.
  */
+function useCarrierCodeAvailable(returnId: string) {
+  return useQuery({
+    queryKey: ["escay-return-code-renew", returnId],
+    queryFn: async () => {
+      const res = await fetch(`/admin/returns/${returnId}/return-code/renew`, { credentials: "include" })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return (await res.json()) as { available: boolean; reason: string | null }
+    },
+    staleTime: 60_000,
+  })
+}
+
+const codeWasSent = (ret: ReturnRow) => Boolean(ret.metadata?.return_code && ret.metadata?.return_code_sent_at)
+
 function CarrierCodeButton({
   ret,
   pending,
@@ -102,22 +116,15 @@ function CarrierCodeButton({
   loading: boolean
   onRenew: (confirmText: string, confirmLabel: string) => void
 }) {
-  const { data } = useQuery({
-    queryKey: ["escay-return-code-renew", ret.id],
-    queryFn: async () => {
-      const res = await fetch(`/admin/returns/${ret.id}/return-code/renew`, { credentials: "include" })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      return (await res.json()) as { available: boolean; reason: string | null }
-    },
-    staleTime: 60_000,
-  })
+  const { data } = useCarrierCodeAvailable(ret.id)
   if (!data?.available) return null
   const has = ret.metadata?.return_code_source === "carrier" && ret.metadata?.return_code
   return (
     <div>
       <Button
         size="small"
-        variant="secondary"
+        // Kod gitmemişse sıradaki iş budur (ana düğme); gittiyse yenileme ikincil iştir.
+        variant={codeWasSent(ret) ? "secondary" : "primary"}
         disabled={pending}
         isLoading={loading}
         onClick={() =>
@@ -135,12 +142,30 @@ function CarrierCodeButton({
   )
 }
 
+/**
+ * "Paket geldi": kabul formunu açar. Sıradaki iş buysa ana düğmedir: kod müşteriye gittiyse
+ * ya da kargo firmasından kod alınamıyorsa (elle kargo). Kod bekleyen iadede ikincildir.
+ */
+function PackageArrivedButton({ ret, open, onToggle }: { ret: ReturnRow; open: boolean; onToggle: () => void }) {
+  const { data } = useCarrierCodeAvailable(ret.id)
+  const isNext = codeWasSent(ret) || data?.available === false
+  return (
+    <div>
+      <Button size="small" variant={isNext && !open ? "primary" : "secondary"} aria-expanded={open} onClick={onToggle}>
+        {open ? "Kabul formunu kapat" : "Paket geldi"}
+      </Button>
+    </div>
+  )
+}
+
 export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?: string }) => {
   const qc = useQueryClient()
   const [reasonById, setReasonById] = useState<Record<string, string>>({})
   const [codeById, setCodeById] = useState<Record<string, string>>({})
   // Reddet / talebi iptal: nadir işlemler, "Diğer işlemler" açılınca görünür
   const [moreById, setMoreById] = useState<Record<string, boolean>>({})
+  // Kabul formu "Paket geldi" düğmesinin arkasında: paket gelmeden para iadesi başlatılmasın.
+  const [acceptOpenById, setAcceptOpenById] = useState<Record<string, boolean>>({})
   // returnId → item_id → kabul satırı (varsayılan: talep edilen adedin tamamı stoğa)
   const [acceptById, setAcceptById] = useState<Record<string, Record<string, AcceptRow>>>({})
   const [partialReasonById, setPartialReasonById] = useState<Record<string, string>>({})
@@ -427,7 +452,7 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
                 </Text>
               ) : r.status === "requested" && !rejected ? (
                 <Text size="small" className="text-ui-fg-error">
-                  Müşteriye iade kodu gitmedi. Aşağıdan kargo firmasından kod alın ya da kargo panelinde açtığınız kodu yazıp gönderin.
+                  Müşteriye iade kodu gitmedi. Kargo firmasından kod alın ya da kargo panelinde açtığınız kodu yazıp gönderin.
                 </Text>
               ) : null}
               {r.status === "requested" && !rejected ? (
@@ -471,7 +496,24 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
                 </div>
               ) : null}
               {confirmAt(r.id, "code")}
-              {r.status === "requested" && !rejected
+              {r.status === "requested" && !rejected ? (
+                <div className="flex flex-col gap-2 border-t border-ui-border-base pt-3">
+                  <Text size="small" className="text-ui-fg-subtle">
+                    {codeWasSent(r)
+                      ? "Paket bekleniyor. Depoya ulaşınca teslim alın."
+                      : "Müşteri paketi kodsuz gönderdiyse, paket ulaşınca buradan teslim alın."}
+                  </Text>
+                  <PackageArrivedButton
+                    ret={r}
+                    open={Boolean(acceptOpenById[r.id])}
+                    onToggle={() => {
+                      setAcceptOpenById((prev) => ({ ...prev, [r.id]: !prev[r.id] }))
+                      setPending(null)
+                    }}
+                  />
+                </div>
+              ) : null}
+              {r.status === "requested" && !rejected && acceptOpenById[r.id]
                 ? (() => {
                     const rows = acceptRows(r)
                     const entries = (r.items || []).filter((it) => it.item_id)
@@ -484,16 +526,12 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
                       return s + row.restock + row.damaged
                     }, 0)
                     const ship = Boolean(shipById[r.id]) && shippingTotal > 0
-                    const exchange = Boolean(r.metadata?.escay_exchange && r.metadata.escay_exchange.status !== "canceled")
                     // Adetler değişirse açık onay geçersiz olur (tutar eski kalmasın).
                     const sig = JSON.stringify([rows, ship])
                     return (
-                      <div className="flex flex-col gap-2 border-t border-ui-border-base pt-3">
-                        <Text size="small" weight="plus">
-                          Paket geldiğinde
-                        </Text>
+                      <div className="flex flex-col gap-2">
                         <Text size="small">
-                          Paket gelince adetleri yazın. Sağlam ürün stoğa döner, hasarlı ürün stoğa girmez; ikisinin de parası iade edilir. Yazmadığınız adet kabul edilmemiş sayılır.
+                          Gelen adetleri yazın. Sağlam ürün stoğa döner, hasarlı ürün stoğa girmez; ikisinin de parası iade edilir. Yazmadığınız adet kabul edilmemiş sayılır.
                         </Text>
                         {entries.map((it) => {
                           const id = it.item_id as string
@@ -615,7 +653,8 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
                               )
                             }}
                           >
-                            {exchange ? "Paket geldi, teslim al" : rejectedQty > 0 ? "Seçilenleri teslim al ve parasını iade et" : "Paket geldi, teslim al ve parayı iade et"}
+                            {/* Parayı düğme değil onay kutusu söyler: tutar ve karta mı elle mi olduğu orada. */}
+                            {rejectedQty > 0 ? "Yazılan adetleri teslim al" : "Teslim al"}
                           </Button>
                         </div>
                         {confirmAt(r.id, "receive", sig)}
@@ -655,10 +694,19 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
                         retryMut.isPending &&
                         retryMut.variables?.returnId === r.id
                       }
-                      onClick={() => retryMut.mutate({ returnId: r.id })}
+                      onClick={() =>
+                        ask(r.id, "retry", {
+                          amountLabel: "Müşterinin kartına iade edilecek",
+                          amount: formatTL(r.metadata?.paytr_refund?.amount ?? 0),
+                          text: "Para iadesi yeniden denenir. Başarılı olursa tutar karta iade edilir; geri alınamaz.",
+                          confirmLabel: "İadeyi tekrar dene",
+                          onConfirm: () => retryMut.mutate({ returnId: r.id }),
+                        })
+                      }
                     >
                       Para iadesini tekrar dene
                     </Button>
+                    {confirmAt(r.id, "retry")}
                   </>
                 )
               ) : null}

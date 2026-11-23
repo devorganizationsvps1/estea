@@ -50,7 +50,7 @@ function statusBadge(
     case "skipped":
       return { label: "Atlandı", color: "grey" }
     case "dry_run":
-      return { label: "DRY-RUN, gönderilmedi", color: "orange" }
+      return { label: "Deneme, gönderilmedi", color: "orange" }
     case "manual_required":
       return { label: "Panelden elle kesilecek", color: "orange" }
     default:
@@ -145,14 +145,18 @@ const BizimhesapInvoiceWidget = () => {
       <div className="mb-2 flex items-center justify-between gap-2">
         <Heading level="h2">Fatura</Heading>
         <div className="flex items-center gap-1">
-          {inv?.mode === "mock" ? <Badge size="2xsmall" color="orange">mock</Badge> : null}
-          <Badge size="2xsmall" color={st.color}>{inv ? st.label : "Teslimden sonra"}</Badge>
+          {inv?.mode === "mock" ? <Badge size="2xsmall" color="orange">Deneme modu</Badge> : null}
+          {inv ? <Badge size="2xsmall" color={st.color}>{st.label}</Badge> : null}
         </div>
       </div>
 
       <div className="space-y-1">
 
-        {!inv ? null : (
+        {!inv ? (
+          <Text size="small" className="text-ui-fg-subtle">
+            Henüz kesilmedi. Sipariş teslim edilince kendiliğinden kesilir.
+          </Text>
+        ) : (
           <>
             {inv.invoice_no ? (
               <Text size="small">
@@ -183,7 +187,7 @@ const BizimhesapInvoiceWidget = () => {
             ) : null}
             {typeof inv.retry_count === "number" && inv.retry_count > 0 ? (
               <Text size="small" className="text-ui-fg-subtle">
-                Retry: {inv.retry_count}
+                {inv.retry_count} kez yeniden denendi
               </Text>
             ) : null}
             {inv.at ? (
@@ -198,26 +202,42 @@ const BizimhesapInvoiceWidget = () => {
           <div className="pt-2">
             <Button
               size="small"
-              variant="secondary"
+              // Fatura yokken elle kesmek istisnadır: düğme geri planda durur.
+              variant={inv ? "secondary" : "transparent"}
               disabled={retryMut.isPending}
               onClick={() => {
                 const send = () => {
                   setRetryMsg(null)
                   retryMut.mutate(uncertain)
                 }
-                if (!uncertain) return send()
-                setConfirm({
-                  text: `Önce BizimHesap panelinde ${inv?.invoice_no || "bu sipariş"} için kayıt olmadığını kontrol edin. Kayıt varsa çift fatura oluşur.`,
-                  confirmLabel: "Panelde yok, yeniden gönder",
-                  onConfirm: send,
-                })
+                setConfirm(
+                  uncertain
+                    ? {
+                        text: `Önce BizimHesap panelinde ${inv?.invoice_no || "bu sipariş"} için kayıt olmadığını kontrol edin. Kayıt varsa çift fatura oluşur.`,
+                        confirmLabel: "Panelde yok, yeniden gönder",
+                        onConfirm: send,
+                      }
+                    : !inv
+                      ? {
+                          text: "Fatura normalde sipariş teslim edilince kendiliğinden kesilir. Şimdi keserseniz BizimHesap'ta bu sipariş için yasal fatura oluşur; geri alınamaz.",
+                          confirmLabel: "Faturayı şimdi kes",
+                          onConfirm: send,
+                        }
+                      : {
+                          text: "Fatura BizimHesap'a yeniden gönderilir. Başarılı olursa bu sipariş için yasal fatura oluşur.",
+                          confirmLabel: "Yeniden gönder",
+                          onConfirm: send,
+                        }
+                )
               }}
             >
               {retryMut.isPending
                 ? "Gönderiliyor…"
                 : uncertain
                   ? "Panelde yok, yeniden gönder"
-                  : "Yeniden gönder"}
+                  : !inv
+                    ? "Faturayı şimdi kes"
+                    : "Yeniden gönder"}
             </Button>
             <div className="mt-2">
               <InlineConfirm spec={confirm} onClose={() => setConfirm(null)} />

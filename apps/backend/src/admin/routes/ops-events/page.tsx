@@ -4,7 +4,7 @@ import { Badge, Button, Container, Heading, Select, Table, Text } from "@medusaj
 import { useQuery } from "@tanstack/react-query"
 import { useEffect, useRef } from "react"
 import { Link } from "react-router-dom"
-import { fetchOpsEvents, formatEventDate, groupEvents, OPS_KIND_LABEL, OPS_LEVEL_BADGE } from "../../lib/ops-events"
+import { fetchOpsEvents, formatEventDate, groupEvents, OPS_KIND_ACTION, OPS_KIND_LABEL, OPS_LEVEL_BADGE, tidyEventText } from "../../lib/ops-events"
 import { useNavBadges } from "../../components/nav-badges"
 import { usePersistedState, useScrollRestore } from "../../lib/persisted-state"
 const MAX_ORDER_LINKS = 6
@@ -25,7 +25,7 @@ const KIND_FILTERS: { value: string; label: string }[] = [
 ]
 
 const LEVEL_FILTERS: { value: string; label: string }[] = [
-  { value: "important", label: "Hata ve uyarı" },
+  { value: "important", label: "Bakılacaklar" },
   { value: "all", label: "Hepsi (bilgi dahil)" },
   { value: "error", label: "Hata" },
   { value: "warning", label: "Uyarı" },
@@ -79,7 +79,7 @@ const OpsEventsPage = () => {
           <Text size="small" className="text-ui-fg-subtle">
             {kind === "system"
               ? "Kurulum ve entegrasyon kayıtları. Teknik sorumlu bakar; günlük işi etkilemez."
-              : "Bakılması gereken hata ve uyarılar. Aynı olay tek satırda toplanır."}
+              : "Bakılması gereken hata ve uyarılar. Aynı olay tek satırda toplanır; kendiliğinden kapanan rutin kayıtlar (ödenmeyen sipariş, reddedilen kart) Hepsi görünümündedir."}
           </Text>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -144,14 +144,25 @@ const OpsEventsPage = () => {
                       </div>
                     ) : "—"}
                   </Table.Cell>
-                  <Table.Cell className="max-w-[520px]">
-                    <div className="txt-compact-small-plus">{n > 1 ? title : e.title}</div>
+                  <Table.Cell className="max-w-[520px] py-2">
+                    <div className="txt-compact-small-plus">{tidyEventText(n > 1 ? title : e.title)}</div>
+                    {/* Önce ne yapılacağı; ham kayıt isteyene açılımda. */}
+                    {e.level !== "info" && OPS_KIND_ACTION[e.kind] ? (
+                      <div className="txt-compact-small">{OPS_KIND_ACTION[e.kind]}</div>
+                    ) : null}
                     {n > 1 && orders.length > 1 ? (
                       <div className="txt-compact-small text-ui-fg-subtle">
-                        {orders.length} sipariş. Ayrıntı için siparişi açın; her siparişin kaydı Olaylar kutusunda.
+                        {orders.length} sipariş. Her siparişin kaydı kendi sayfasındaki Olaylar kutusunda.
                       </div>
                     ) : e.detail ? (
-                      <div className="txt-compact-small text-ui-fg-subtle whitespace-pre-wrap">{e.detail}</div>
+                      e.level !== "info" && OPS_KIND_ACTION[e.kind] ? (
+                        <details className="txt-compact-small text-ui-fg-subtle">
+                          <summary className="cursor-pointer py-1">Teknik ayrıntı</summary>
+                          <div className="whitespace-pre-wrap break-words">{tidyEventText(e.detail)}</div>
+                        </details>
+                      ) : (
+                        <div className="txt-compact-small text-ui-fg-subtle whitespace-pre-wrap">{tidyEventText(e.detail)}</div>
+                      )
                     ) : null}
                   </Table.Cell>
                 </Table.Row>
@@ -164,7 +175,8 @@ const OpsEventsPage = () => {
 
       <div className="flex flex-wrap items-center justify-between gap-2 px-6 py-3">
         <Text size="small" className="text-ui-fg-subtle">
-          {count} olay, sayfa {page + 1}/{pages}
+          {groupEvents(events).length} konu ({events.length} kayıt)
+          {pages > 1 ? `, sayfa ${page + 1}/${pages}, toplam ${count} kayıt` : ""}
         </Text>
         {systemCount > 0 ? (
           <Button size="small" variant="transparent" onClick={() => { setKind("system"); setPage(0) }}>

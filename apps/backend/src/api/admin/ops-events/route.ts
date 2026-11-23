@@ -17,10 +17,10 @@ export const GET = async (req: AuthenticatedMedusaRequest, res: MedusaResponse) 
   const offset = Math.max(0, Number(q.offset) || 0)
   const filters: Record<string, unknown> = {}
   if (q.level && ["info", "warning", "error"].includes(q.level)) filters.level = q.level
-  // "important": bakılması gerekenler (hata + uyarı), bilgi satırları hariç
+  // "important": bakılması gerekenler (hata + uyarı); bilgi satırları ve rutin uyarılar hariç
   if (q.level === "important") filters.level = ["warning", "error"]
   if (q.order_id) filters.order_id = q.order_id
-  filters.kind = opsKindFilter(q.kind)
+  filters.kind = opsKindFilter(q.kind, { importantOnly: q.level === "important" })
 
   const service = req.scope.resolve<OpsEventModuleService>(OPS_EVENT_MODULE)
   const [events, count] = await service.listAndCountOpsEvents(filters, {

@@ -47,6 +47,32 @@ export const OPS_KIND_LABEL: Record<string, string> = {
   "mail.failed": "Mail gönderilemedi",
 }
 
+/** Olay başına tek cümle: personel ne yapmalı. Ham ayrıntı "Teknik ayrıntı" açılımında kalır. */
+export const OPS_KIND_ACTION: Record<string, string> = {
+  "payment.alert": "Müşteriden para çekildi ama sipariş düzgün oluşmadı. Teknik sorumluya haber verin; para PayTR panelinden iade edilir ya da sipariş elle açılır.",
+  "shipment.failed": "Siparişi açın; sebep giderilince Gönderi aç düğmesine basın.",
+  "shipment.audit": "Siparişi açıp gönderiyi açın ya da durumunu düzeltin.",
+  "shipment.problem": "Kargo firmasıyla görüşün; gecikme varsa müşteriye haber verin.",
+  "return.code_failed": "İadeyi açıp kodu kargo firmasından alın ya da elle yazıp gönderin.",
+  "return.refund_failed": "İadeyi açıp Para iadesini tekrar dene düğmesine basın. Yine olmazsa teknik sorumluya haber verin.",
+  "exchange.failed": "Değişimi açıp Yeni ürünü gönder düğmesine basın.",
+  "invoice.failed": "Siparişin Fatura kartından yeniden gönderin.",
+  "invoice.refund_manual": "İade faturasını BizimHesap'tan elle kesin.",
+}
+
+const TL = new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" })
+
+/**
+ * Olay metinleri sunucuda düz yazılır ("1800.00 TL", "2026-11-22"); panelde tutar ve tarih
+ * tek biçimde görünsün diye gösterirken çevrilir ("₺1.800,00", "22.11.2026").
+ */
+export function tidyEventText(text: string): string {
+  return text
+    .replace(/(\d+(?:\.\d{1,2})?) TL\b/g, (_, n: string) => TL.format(Number(n)))
+    .replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, "$3.$2.$1")
+    .replace(/\s+·\s+(\d{2}\.\d{2}\.\d{4})/g, ", $1")
+}
+
 export const OPS_LEVEL_BADGE: Record<OpsEvent["level"], { label: string; color: "green" | "orange" | "red" | "grey" }> = {
   info: { label: "Bilgi", color: "green" },
   warning: { label: "Uyarı", color: "orange" },
