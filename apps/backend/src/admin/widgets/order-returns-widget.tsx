@@ -1,4 +1,5 @@
 import { defineWidgetConfig } from "@medusajs/admin-sdk"
+import { formatDateTime } from "../lib/dates"
 import { TriangleRightMini } from "@medusajs/icons"
 import { Badge, Container, Heading, Text } from "@medusajs/ui"
 import { useQuery } from "@tanstack/react-query"
@@ -8,7 +9,7 @@ import { ExchangePanel } from "../components/exchange-panel"
 import { isRejected, statusLabel, type ReturnRow } from "../components/return-panel"
 
 const shortDate = (d?: string | null) =>
-  d ? new Date(d).toLocaleString("tr-TR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""
+  formatDateTime(d)
 
 /**
  * Sipariş sayfası "İade ve değişim" kutusu — yalnız özet. Her iade bir satır;

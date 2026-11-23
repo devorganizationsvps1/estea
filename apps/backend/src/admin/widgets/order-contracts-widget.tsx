@@ -1,4 +1,5 @@
 import { defineWidgetConfig } from "@medusajs/admin-sdk"
+import { formatDateTime } from "../lib/dates"
 import { Badge, Button, Container, Heading, Text } from "@medusajs/ui"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useParams } from "react-router-dom"
@@ -18,16 +19,7 @@ type ContractsMeta = {
   text_version?: string
 }
 
-const fmt = (iso?: string | null) =>
-  iso
-    ? new Date(iso).toLocaleString("tr-TR", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    : "—"
+const fmt = (iso?: string | null) => formatDateTime(iso) || "—"
 
 /**
  * Sipariş detayı — yeni sistemin sözleşme PDF'leri (S3 contracts/<sipariş>/).

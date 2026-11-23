@@ -46,6 +46,24 @@ export type OpsEventKind =
   | "stock.sync"
   | "mail.failed"
 
+/**
+ * Teknik olaylar: personelin çözemeyeceği, kurulum / entegrasyon kaynaklı kayıtlar
+ * (dosya deposu, kargo hesabı ayarı, stok eşitleme, mail sunucusu). Olay kaydında
+ * ayrı "Sistem" filtresinde durur; varsayılan görünümde ve sipariş sayfasındaki
+ * Olaylar kutusunda görünmez.
+ */
+export const SYSTEM_EVENT_KINDS: OpsEventKind[] = ["contract.failed", "carrier.health", "stock.sync", "mail.failed"]
+
+/**
+ * Olay kaydı tür filtresi: "system" → yalnız teknik olaylar; "payment" gibi önek → o
+ * türler; boş → teknik olaylar hariç hepsi.
+ */
+export function opsKindFilter(kind: string | undefined): unknown {
+  if (kind === "system") return SYSTEM_EVENT_KINDS
+  if (!kind) return { $nin: SYSTEM_EVENT_KINDS }
+  return kind.includes(".") ? kind : { $like: `${kind}.%` }
+}
+
 export type OpsEventInput = {
   kind: OpsEventKind
   level: OpsEventLevel

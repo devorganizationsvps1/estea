@@ -1,4 +1,6 @@
 import { Badge, Button, Container, Heading, Text } from "@medusajs/ui"
+import { formatDateTime } from "../lib/dates"
+import { ArrowLeftMini } from "@medusajs/icons"
 import { useQuery } from "@tanstack/react-query"
 import { Link, useNavigate } from "react-router-dom"
 
@@ -34,7 +36,7 @@ type OrderInfo = {
 }
 
 const longDate = (d?: string | null) =>
-  d ? new Date(d).toLocaleString("tr-TR", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : ""
+  formatDateTime(d)
 
 const money = (n?: number | null, cur?: string | null) =>
   n == null ? "—" : new Intl.NumberFormat("tr-TR", { style: "currency", currency: (cur || "try").toUpperCase() }).format(Number(n))
@@ -50,7 +52,7 @@ async function getJson<T>(url: string): Promise<T> {
  * ayrı: solda yapılacak iş (teslim al, reddet, iade kodu, değişim), sağda
  * müşteri ve sipariş özeti. Sidebar'da İadeler / Değişimler seçili kalır.
  */
-export const ReturnDetail = ({ returnId }: { returnId: string }) => {
+export const ReturnDetail = ({ returnId, back }: { returnId: string; back: { to: string; label: string } }) => {
   const navigate = useNavigate()
 
   const ret = useQuery({
@@ -96,6 +98,13 @@ export const ReturnDetail = ({ returnId }: { returnId: string }) => {
   const orderLabel = o?.display_id ? `#${o.display_id}` : "Sipariş"
 
   return (
+    <div className="flex flex-col gap-y-3">
+      <div>
+        <Link to={back.to} className="txt-compact-small-plus inline-flex min-h-[32px] items-center gap-1 text-ui-fg-subtle hover:text-ui-fg-base">
+          <ArrowLeftMini aria-hidden />
+          {back.label}
+        </Link>
+      </div>
     <div className="flex flex-col gap-x-4 gap-y-3 xl:flex-row xl:items-start">
       <div className="flex w-full min-w-0 flex-col gap-y-3">
         <Container className="flex flex-wrap items-center justify-between gap-3 px-6 py-4">
@@ -160,6 +169,7 @@ export const ReturnDetail = ({ returnId }: { returnId: string }) => {
           </div>
         </Container>
       </div>
+    </div>
     </div>
   )
 }

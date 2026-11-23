@@ -18,6 +18,10 @@ const KIND_FILTERS: { value: string; label: string }[] = [
   { value: "shipment", label: "Kargo" },
   { value: "return", label: "İade" },
   { value: "exchange", label: "Değişim" },
+  { value: "invoice", label: "Fatura" },
+  // Kurulum ve entegrasyon kayıtları (dosya deposu, kargo hesabı, stok eşitleme, mail):
+  // personelin çözeceği iş değil, teknik sorumlu bakar. Varsayılan görünümde yoktur.
+  { value: "system", label: "Sistem (teknik)" },
 ]
 
 const LEVEL_FILTERS: { value: string; label: string }[] = [
@@ -50,6 +54,13 @@ const OpsEventsPage = () => {
   })
 
   const events = data?.events || []
+  // Teknik kayıtlar günlük görünümde yok; unutulmasın diye sayısı altta yazar.
+  const system = useQuery({
+    queryKey: ["escay-ops-events-system-count"],
+    queryFn: () => fetchOpsEvents({ kind: "system", level: "important", limit: 1 }),
+    enabled: kind !== "system",
+  })
+  const systemCount = kind === "system" ? 0 : system.data?.count || 0
   const rootRef = useRef<HTMLDivElement>(null)
   useScrollRestore("ops-events", rootRef, !isLoading)
 
@@ -66,7 +77,9 @@ const OpsEventsPage = () => {
         <div>
           <Heading level="h1">Olay kaydı</Heading>
           <Text size="small" className="text-ui-fg-subtle">
-            Bakılması gereken hata ve uyarılar. Aynı olay tek satırda toplanır.
+            {kind === "system"
+              ? "Kurulum ve entegrasyon kayıtları. Teknik sorumlu bakar; günlük işi etkilemez."
+              : "Bakılması gereken hata ve uyarılar. Aynı olay tek satırda toplanır."}
           </Text>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -91,8 +104,11 @@ const OpsEventsPage = () => {
       {isLoading ? (
         <Text size="small" className="px-6 py-4 text-ui-fg-subtle">Yükleniyor…</Text>
       ) : events.length === 0 ? (
-        <Text size="small" className="px-6 py-4 text-ui-fg-subtle">Kayıtlı olay yok.</Text>
+        <Text size="small" className="px-6 py-4 text-ui-fg-subtle">
+          {level === "important" ? "Bakılacak hata ya da uyarı yok." : "Bu filtrelerle kayıtlı olay yok."}
+        </Text>
       ) : (
+        <div className="overflow-x-auto">
         <Table>
           <Table.Header>
             <Table.Row>
@@ -143,12 +159,18 @@ const OpsEventsPage = () => {
             })}
           </Table.Body>
         </Table>
+        </div>
       )}
 
-      <div className="flex items-center justify-between px-6 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-6 py-3">
         <Text size="small" className="text-ui-fg-subtle">
-          {count} olay · sayfa {page + 1}/{pages}
+          {count} olay, sayfa {page + 1}/{pages}
         </Text>
+        {systemCount > 0 ? (
+          <Button size="small" variant="transparent" onClick={() => { setKind("system"); setPage(0) }}>
+            Sistem kayıtlarında {systemCount} hata ve uyarı var
+          </Button>
+        ) : null}
         <div className="flex gap-2">
           <Button size="small" variant="transparent" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
             Önceki

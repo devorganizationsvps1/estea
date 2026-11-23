@@ -87,6 +87,7 @@ const ReconcilePage = () => {
         Kargo firmasının raporunu satır satır yapıştırın: <span className="font-mono">ESC-65;TAKIPNO;teslim</span>. Önce kontrol edin. "Uygula" eksik kimlikleri siparişe bağlar ve firmanın bildirdiği kargoya verildi / teslim durumunu işler; zaten doğru olan satırlara dokunulmaz.
       </Text>
       <Textarea
+        aria-label="Kargo firması raporu, her satırda bir gönderi"
         value={text}
         onChange={(e) => {
           setText(e.target.value)
@@ -114,6 +115,7 @@ const ReconcilePage = () => {
       </div>
 
       {results ? (
+        <div className="overflow-x-auto">
         <Table>
           <Table.Header>
             <Table.Row>
@@ -153,6 +155,7 @@ const ReconcilePage = () => {
             })}
           </Table.Body>
         </Table>
+        </div>
       ) : null}
     </Container>
   )

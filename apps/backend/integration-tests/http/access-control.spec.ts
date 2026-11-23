@@ -48,6 +48,7 @@ const ADMIN_ROUTES: [method: "get" | "post", path: string][] = [
   ["post", "/admin/returns/ret_x/exchange/reship"],
   ["post", "/admin/returns/ret_x/exchange/ship"],
   ["post", "/admin/returns/ret_x/refund"],
+  ["post", "/admin/returns/ret_x/refund-preview"],
   ["post", "/admin/returns/ret_x/reject"],
   ["post", "/admin/returns/ret_x/return-code"],
   ["get", "/admin/returns/ret_x/return-code/renew"],

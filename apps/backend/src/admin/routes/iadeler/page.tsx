@@ -121,6 +121,7 @@ const ReturnsPage = () => {
       ) : rows.length === 0 ? (
         <Text size="small" className="px-6 py-4 text-ui-fg-subtle">Bu durumda iade yok.</Text>
       ) : (
+        <div className="overflow-x-auto">
         <Table>
           <Table.Header>
             <Table.Row>
@@ -146,7 +147,11 @@ const ReturnsPage = () => {
                   <Table.Cell className="whitespace-nowrap">{formatEventDate(r.created_at)}</Table.Cell>
                   <Table.Cell>
                     {r.order_id ? (
-                      <Link to={`/iadeler/${r.id}`} className="text-ui-fg-interactive">
+                      <Link
+                        to={`/iadeler/${r.id}`}
+                        aria-label={`Sipariş #${r.order_display_id ?? r.order_id.slice(-6)} iadesini aç`}
+                        className="-my-2 inline-flex min-h-[40px] min-w-[44px] items-center text-ui-fg-interactive"
+                      >
                         #{r.order_display_id ?? r.order_id.slice(-6)}
                       </Link>
                     ) : "—"}
@@ -161,7 +166,7 @@ const ReturnsPage = () => {
                     {r.items.map((it, i) => (
                       <div key={i} className="txt-compact-small">
                         {it.quantity} × {it.title}
-                        {it.reason ? <span className="text-ui-fg-subtle"> · {it.reason}</span> : null}
+                        {it.reason ? <span className="text-ui-fg-subtle">, {it.reason}</span> : null}
                       </div>
                     ))}
                     {r.customer_note ? (
@@ -185,7 +190,7 @@ const ReturnsPage = () => {
                       r.return_code ? (
                         <div className={`txt-compact-small ${r.return_code_sent === false ? "text-ui-fg-error" : "text-ui-fg-subtle"}`}>
                           İade kodu: {r.return_code}
-                          {r.return_code_sent === false ? " · müşteriye gönderilemedi" : ""}
+                          {r.return_code_sent === false ? ", müşteriye gönderilemedi" : ""}
                         </div>
                       ) : (
                         <div className="txt-compact-small text-ui-fg-error">İade kodu gönderilmedi</div>
@@ -197,6 +202,7 @@ const ReturnsPage = () => {
             })}
           </Table.Body>
         </Table>
+        </div>
       )}
     </Container>
   )

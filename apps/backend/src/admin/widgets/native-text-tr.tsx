@@ -11,11 +11,13 @@ import { useEffect } from "react"
  *   - "₺ 1.949,90 TRY" → "₺1.949,90" (panelde tek tutar biçimi, bkz. lib/money.ts)
  *   - Özet kartı: indirim yoksa indirim satırları gizlenir; eksi "Kalan tutar"
  *     (iade bekleyen sipariş) "Müşteriye iade edilecek" diye yazılır
+ *   - Sipariş listesi: "Satış Kanalı" ve bayrak sütunu gizlenir (tek kanal, tek ülke)
  * Yalnız metnin tamamı eşleşirse değiştirir; görünür bir şey çizmez.
  */
 const EXACT: Record<string, string> = {
   Drafts: "Taslak siparişler",
-  Captured: "Tahsil edildi",
+  // Sipariş listesindeki ödeme sütunuyla aynı sözcük (tr.json orders.payment.status.captured)
+  Captured: "Alındı",
   Pending: "Bekliyor",
   Canceled: "İptal edildi",
   Manual: "Elle",
@@ -59,6 +61,24 @@ function tidySummary() {
   }
 }
 
+/**
+ * Sipariş listesi: tek satış kanalı ve tek ülke var, "Satış Kanalı" ile bayrak sütunu
+ * bilgi taşımaz. Sütun numarası tabloya yazılır, gizleme CSS'te (escay-white-theme).
+ */
+function hideOrderListColumns() {
+  for (const table of document.querySelectorAll<HTMLTableElement>("main table")) {
+    const heads = [...table.querySelectorAll("thead th")]
+    const channel = heads.findIndex((th) => th.textContent?.trim() === "Satış Kanalı")
+    if (channel < 0) continue
+    const hide = [channel + 1]
+    // Bayrak sütunu: başlıksız son sütun (satır menüsü olan tablolarda dokunulmaz).
+    const last = heads.length - 1
+    if (!heads[last].textContent?.trim() && !table.querySelector("tbody td:last-child button")) hide.push(last + 1)
+    const value = hide.join(" ")
+    if (table.dataset.escayHide !== value) table.dataset.escayHide = value
+  }
+}
+
 function translate(text: string): string | null {
   const trimmed = text.trim()
   if (EXACT[trimmed]) return text.replace(trimmed, EXACT[trimmed])
@@ -87,6 +107,7 @@ function schedule() {
     frame = null
     fix(document.body)
     tidySummary()
+    hideOrderListColumns()
   })
 }
 
@@ -96,6 +117,7 @@ const NativeTextTr = () => {
     if (!observer) {
       fix(document.body)
       tidySummary()
+    hideOrderListColumns()
       observer = new MutationObserver(schedule)
       observer.observe(document.body, { childList: true, subtree: true, characterData: true })
     }

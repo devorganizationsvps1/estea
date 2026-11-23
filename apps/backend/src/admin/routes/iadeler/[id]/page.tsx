@@ -5,7 +5,7 @@ import { ReturnDetail } from "../../../components/return-detail"
 /** İade sayfası — sipariş sayfasından ayrı; sidebar'da İadeler seçili kalır. */
 const Page = () => {
   const { id } = useParams()
-  return id ? <ReturnDetail returnId={id} /> : null
+  return id ? <ReturnDetail returnId={id} back={{ to: "/iadeler", label: "İadeler" }} /> : null
 }
 
 export const handle = {

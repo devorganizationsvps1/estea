@@ -4,6 +4,7 @@ import "@fontsource/figtree/400.css"
 import "@fontsource/figtree/500.css"
 import "@fontsource/figtree/600.css"
 import "@fontsource/figtree/700.css"
+import { nextInVisualOrder } from "../lib/visual-order"
 
 /**
  * Panelin küresel görünümü: aydınlık temada beyaz zemin, ince kenarlıklı kartlar.
@@ -150,6 +151,25 @@ html aside nav .flex.flex-col.gap-y-1 > div:has(> div > a[href$="/promotions"]) 
   border-top: 1px solid var(--border-base);
 }
 
+/* Liste sütunu gizleme: widgets/native-text-tr.tsx tabloya data-escay-hide="4 8" yazar. */
+html table[data-escay-hide~="1"] :is(th, td):nth-child(1) { display: none; }
+html table[data-escay-hide~="2"] :is(th, td):nth-child(2) { display: none; }
+html table[data-escay-hide~="3"] :is(th, td):nth-child(3) { display: none; }
+html table[data-escay-hide~="4"] :is(th, td):nth-child(4) { display: none; }
+html table[data-escay-hide~="5"] :is(th, td):nth-child(5) { display: none; }
+html table[data-escay-hide~="6"] :is(th, td):nth-child(6) { display: none; }
+html table[data-escay-hide~="7"] :is(th, td):nth-child(7) { display: none; }
+html table[data-escay-hide~="8"] :is(th, td):nth-child(8) { display: none; }
+html table[data-escay-hide~="9"] :is(th, td):nth-child(9) { display: none; }
+html table[data-escay-hide~="10"] :is(th, td):nth-child(10) { display: none; }
+
+/* Sayı sütunları ve tutarlar aynı hizada */
+html .tabular-nums { font-variant-numeric: tabular-nums; }
+
+/* Seçim ve klavye odağı panelin mavisinden */
+html:not(.dark) ::selection { background: #d6e4f7; color: #1f2328; }
+html aside a:focus-visible { outline: 2px solid var(--fg-interactive); outline-offset: -2px; }
+
 /* Giriş ekranı: Medusa logosu yerine Es Çay harfi (metin i18n/json/tr.json login.title). */
 html .max-w-\\[280px\\] > .h-\\[50px\\].w-\\[50px\\] > * { display: none; }
 html .max-w-\\[280px\\] > .h-\\[50px\\].w-\\[50px\\]::before {
@@ -184,6 +204,48 @@ if (typeof document !== "undefined") {
     (document.getElementById(STYLE_ID) as HTMLStyleElement | null) ??
     document.head.appendChild(Object.assign(document.createElement("style"), { id: STYLE_ID }))
   style.textContent = CSS
+}
+
+if (typeof document !== "undefined") {
+  // Sekme başlığı: "Siparişler - Medusa" → "Siparişler - Es Çay".
+  const fixTitle = () => {
+    if (document.title.endsWith(" - Medusa")) document.title = document.title.replace(/ - Medusa$/, " - Es Çay")
+    else if (document.title === "Medusa") document.title = "Es Çay"
+  }
+  fixTitle()
+  new MutationObserver(fixTitle).observe(document.head, { childList: true, subtree: true, characterData: true })
+
+  // Menü sırası CSS `order` ile verildiği için Tab, DOM sırasıyla (eski sıra) gezerdi.
+  // Menü içinde Tab / Shift+Tab görünen sırayla ilerler; uçlarda menünün dışına çıkar.
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Tab" || e.altKey || e.ctrlKey || e.metaKey) return
+    const current = document.activeElement as HTMLElement | null
+    const column = current?.closest<HTMLElement>("aside nav .flex.flex-col.gap-y-1")
+    if (!current || !column) return
+    const next = nextInVisualOrder(
+      [...column.querySelectorAll<HTMLElement>("a[href], button:not([disabled])")]
+        .filter((el) => el.offsetParent !== null)
+        .map((el) => ({ el, top: el.getBoundingClientRect().top })),
+      current,
+      e.shiftKey ? -1 : 1
+    )
+    if (next) {
+      e.preventDefault()
+      next.focus()
+      return
+    }
+    // Uçta: menü sütununun DOM'daki ilk / son öğesinden tarayıcının kendi sırasına bırak.
+    const all = [...document.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])')].filter(
+      (el) => el.offsetParent !== null
+    )
+    const inside = all.filter((el) => column.contains(el))
+    const edge = all.indexOf(e.shiftKey ? inside[0] : inside[inside.length - 1])
+    const target = all[edge + (e.shiftKey ? -1 : 1)]
+    if (target) {
+      e.preventDefault()
+      target.focus()
+    }
+  })
 }
 
 const EscayWhiteTheme = () => null

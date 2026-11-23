@@ -1,9 +1,11 @@
 import { defineWidgetConfig } from "@medusajs/admin-sdk"
 import { Badge, Button, Checkbox, Container, Heading, Select, Text, toast } from "@medusajs/ui"
 import { useQuery } from "@tanstack/react-query"
-import { useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Link } from "react-router-dom"
 import { ORDER_STATUS_BADGE, resolveOrderTimeline, type OrderTimelineInput } from "../lib/order-timeline"
+import { InlineConfirm, type ConfirmSpec } from "../components/inline-confirm"
+import { formatDateTime } from "../lib/dates"
 import { printOrderLabels, skippedLabelsMessage } from "../lib/print-labels"
 import { usePersistedState, useScrollRestore } from "../lib/persisted-state"
 
@@ -39,6 +41,8 @@ type ShipFilter = "any" | "none" | "label" | "shipped" | "delivered"
 
 /** "Yeniden gönderi aç" butonu (2 desi geçişinde kullanıldı) — gizli. */
 const SHOW_RESHIP = false
+/** Havale kapalı (2026-11-07): "Havale bekleyenler" sekmesi gizli. Havale açılırsa true. */
+const SHOW_BANK_TRANSFER = false
 
 const PAYMENT_FILTERS: { value: PaymentFilter; label: string }[] = [
   { value: "any", label: "Ödeme: tümü" },
@@ -124,11 +128,16 @@ function shippingStatus(order: ListOrder): {
   if (active.shipped_at) {
     return { label: "Kargoda", color: "blue", detail: [carrierStatus, tracking].filter(Boolean).join(" · ") }
   }
+  // "Hazırlanıyor" sipariş durumunun adıdır (Durum sütunu); burada yalnız kargo tarafı yazar.
   if (text(data.carrier) === "manual" || !text(data.shipment_ref)) {
-    return { label: "Hazırlanıyor", color: "orange", detail: tracking }
+    return { label: "Elle gönderi", color: "grey", detail: tracking }
   }
-  if (carrierStatus) return { label: carrierStatus, color: "blue", detail: tracking }
-  return { label: text(data.label_url) ? "Etiket hazır" : "Gönderi açıldı", color: text(data.label_url) ? "blue" : "orange", detail: tracking }
+  const hasLabel = Boolean(text(data.label_url) || text(data.label_zpl))
+  return {
+    label: hasLabel ? "Etiket hazır" : "Etiket bekleniyor",
+    color: hasLabel ? "blue" : "orange",
+    detail: [carrierStatus, tracking].filter(Boolean).join(" · "),
+  }
 }
 
 /**
@@ -143,22 +152,15 @@ function awaitingBankTransfer(order: ListOrder): boolean {
   })
 }
 
-function formatDate(value?: string | null): string {
-  if (!value) return "—"
-  return new Date(value).toLocaleString("tr-TR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  })
-}
+const formatDate = (value?: string | null): string => formatDateTime(value) || "—"
 
 /**
  * Sipariş listesi — kargolanacak siparişlerin sipariş/kargo etiketlerini toplu yazdır.
  */
 const OrderBulkLabelsWidget = () => {
-  const [filter, setFilter] = usePersistedState<Filter>("bulk-labels:filter", "to_ship")
+  const [savedFilter, setFilter] = usePersistedState<Filter>("bulk-labels:filter", "to_ship")
+  const filter: Filter = savedFilter === "bank_transfer" && !SHOW_BANK_TRANSFER ? "to_ship" : savedFilter
+  const [confirm, setConfirm] = useState<ConfirmSpec | null>(null)
   const [labelFilter, setLabelFilter] = usePersistedState<LabelFilter>("bulk-labels:label", "any")
   const [paymentFilter, setPaymentFilter] = usePersistedState<PaymentFilter>("bulk-labels:payment", "any")
   const [shipFilter, setShipFilter] = usePersistedState<ShipFilter>("bulk-labels:ship", "any")
@@ -184,6 +186,21 @@ const OrderBulkLabelsWidget = () => {
   // Sipariş listesi sayfasının kaydırma konumu (widget kapalıyken de Medusa tablosu için).
   const rootRef = useRef<HTMLDivElement>(null)
   useScrollRestore("orders-list", rootRef, !open || !isLoading)
+
+  // Seçim açıkken alttaki Medusa listesi gizlenir: aynı siparişler iki tabloda,
+  // iki ayrı sekme takımıyla görünmesin. "Sipariş listesine dön" geri getirir.
+  useEffect(() => {
+    const hidden: HTMLElement[] = []
+    if (open) {
+      for (let el = rootRef.current?.nextElementSibling; el; el = el.nextElementSibling) {
+        if (el instanceof HTMLElement && el.style.display !== "none") {
+          el.style.display = "none"
+          hidden.push(el)
+        }
+      }
+    }
+    return () => hidden.forEach((el) => (el.style.display = ""))
+  }, [open])
 
   const rows = useMemo(() => {
     return (data?.orders || [])
@@ -242,15 +259,19 @@ const OrderBulkLabelsWidget = () => {
    * Seçili siparişlerin gönderisini firmada iptal edip yeniden aç.
    * Sırayla; hata veren (firma iptali reddeden) sipariş atlanır, sonda raporlanır.
    */
+  const askReship = () => {
+    if (!selectedIds.length) return
+    setConfirm({
+      text: `${selectedIds.length} siparişin kargo gönderisi firmada iptal edilir ve yenisi açılır (yeni barkod, yeni kargo ücreti). Eski etiketler geçersiz olur, yeniden basılmalı. Yalnız kuryenin almadığı paketler için yapın.`,
+      confirmLabel: `${selectedIds.length} gönderiyi yeniden aç`,
+      danger: true,
+      onConfirm: () => void reship(),
+    })
+  }
+
   const reship = async () => {
     const targets = rows.filter((r) => selectedIds.includes(r.order.id)).map((r) => r.order)
     if (!targets.length) return
-    const ok = window.confirm(
-      `${targets.length} siparişin mevcut kargo gönderisi İPTAL edilip YENİ gönderi açılacak ` +
-        `(yeni barkod, yeni kargo ücreti). Eski etiketler geçersiz olur, yeniden basılmalı. ` +
-        `Kuryenin almadığı paketler için yapın. Devam?`
-    )
-    if (!ok) return
     setBusy("reship")
     const failed: string[] = []
     let done = 0
@@ -287,15 +308,20 @@ const OrderBulkLabelsWidget = () => {
    * Sisteme düşmeden kargolanan (şubede elle verilen) siparişleri
    * düzeltir: sırayla "Kargoya verildi" / "Teslim edildi", müşteriye mail gitmez.
    */
+  const askMarkStatus = (action: "ship" | "deliver") => {
+    if (!selectedIds.length) return
+    const label = action === "deliver" ? "Teslim edildi" : "Kargoya verildi"
+    setConfirm({
+      text: `${selectedIds.length} sipariş "${label}" olarak işaretlenir. Müşteriye mail gitmez. Yalnız gerçekten ${action === "deliver" ? "teslim edilmiş" : "kargoya verilmiş"} siparişler için yapın.`,
+      confirmLabel: `${selectedIds.length} siparişi işaretle`,
+      onConfirm: () => void markStatus(action),
+    })
+  }
+
   const markStatus = async (action: "ship" | "deliver") => {
     const targets = rows.filter((r) => selectedIds.includes(r.order.id)).map((r) => r.order)
     if (!targets.length) return
     const label = action === "deliver" ? "Teslim edildi" : "Kargoya verildi"
-    const ok = window.confirm(
-      `${targets.length} sipariş "${label}" olarak işaretlenecek. Müşteriye mail GÖNDERİLMEZ. ` +
-        `Yalnız gerçekten ${action === "deliver" ? "teslim edilmiş" : "kargoya verilmiş"} siparişler için yapın. Devam?`
-    )
-    if (!ok) return
     setBusy(action)
     const failed: string[] = []
     let done = 0
@@ -331,11 +357,13 @@ const OrderBulkLabelsWidget = () => {
         <div>
           <Heading level="h2">Etiketleri toplu yazdır</Heading>
           <Text size="small" className="text-ui-fg-subtle">
-            Kargo firmasının etiketi (geldiği gibi), istenirse arkasında sipariş fişi.
+            {open
+              ? "Siparişleri işaretleyip yazdırın. Kargo firmasının etiketi geldiği gibi basılır, istenirse arkasında sipariş fişi."
+              : "Birden çok siparişin kargo etiketini ve fişini tek seferde yazdırın."}
           </Text>
         </div>
         <Button size="small" variant="secondary" onClick={() => setOpen((v) => !v)}>
-          {open ? "Kapat" : "Sipariş seç"}
+          {open ? "Sipariş listesine dön" : "Sipariş seç"}
         </Button>
       </div>
 
@@ -349,13 +377,15 @@ const OrderBulkLabelsWidget = () => {
             >
               Kargolanacaklar
             </Button>
-            <Button
-              size="small"
-              variant={filter === "bank_transfer" ? "primary" : "transparent"}
-              onClick={() => setFilter("bank_transfer")}
-            >
-              Havale bekleyenler
-            </Button>
+            {SHOW_BANK_TRANSFER ? (
+              <Button
+                size="small"
+                variant={filter === "bank_transfer" ? "primary" : "transparent"}
+                onClick={() => setFilter("bank_transfer")}
+              >
+                Havale bekleyenler
+              </Button>
+            ) : null}
             <Button
               size="small"
               variant={filter === "all" ? "primary" : "transparent"}
@@ -418,7 +448,7 @@ const OrderBulkLabelsWidget = () => {
                 isLoading={busy === "slip"}
                 onClick={() => print(true)}
               >
-                Etiket + fiş ({selectedIds.length})
+                Etiket ve fişi yazdır ({selectedIds.length})
               </Button>
               <Button
                 size="small"
@@ -427,14 +457,14 @@ const OrderBulkLabelsWidget = () => {
                 isLoading={busy === "label"}
                 onClick={() => print(false)}
               >
-                Fişsiz ({selectedIds.length})
+                Yalnız etiket ({selectedIds.length})
               </Button>
               <Button
                 size="small"
                 variant="secondary"
                 disabled={!selectedIds.length || busy !== null}
                 isLoading={busy === "ship"}
-                onClick={() => markStatus("ship")}
+                onClick={() => askMarkStatus("ship")}
               >
                 Kargoya verildi ({selectedIds.length})
               </Button>
@@ -443,7 +473,7 @@ const OrderBulkLabelsWidget = () => {
                 variant="secondary"
                 disabled={!selectedIds.length || busy !== null}
                 isLoading={busy === "deliver"}
-                onClick={() => markStatus("deliver")}
+                onClick={() => askMarkStatus("deliver")}
               >
                 Teslim edildi ({selectedIds.length})
               </Button>
@@ -454,7 +484,7 @@ const OrderBulkLabelsWidget = () => {
                 variant="danger"
                 disabled={!selectedIds.length || busy !== null}
                 isLoading={busy === "reship"}
-                onClick={reship}
+                onClick={askReship}
               >
                 Yeniden gönderi aç ({selectedIds.length})
               </Button>
@@ -462,6 +492,11 @@ const OrderBulkLabelsWidget = () => {
             </div>
           </div>
 
+          {confirm ? (
+            <div className="px-6 py-3">
+              <InlineConfirm spec={confirm} onClose={() => setConfirm(null)} />
+            </div>
+          ) : null}
           {statusProgress ? (
             <Text size="small" className="px-6 py-2 text-ui-fg-subtle">
               {statusProgress} — sayfayı kapatmayın.
@@ -472,7 +507,7 @@ const OrderBulkLabelsWidget = () => {
               Gönderiler yeniden açılıyor: {reshipProgress} — sayfayı kapatmayın.
             </Text>
           ) : null}
-          <div className="max-h-[420px] overflow-y-auto">
+          <div className="max-h-[70vh] overflow-auto">
             {isLoading ? (
               <Text size="small" className="px-6 py-4 text-ui-fg-subtle">
                 Siparişler yükleniyor…
@@ -488,11 +523,11 @@ const OrderBulkLabelsWidget = () => {
                     : "Sipariş yok."}
               </Text>
             ) : (
-              <table className="w-full text-left">
+              <table className="w-full min-w-[640px] text-left">
                 <thead>
                   <tr className="border-b text-ui-fg-subtle">
                     <th className="w-10 px-6 py-2">
-                      <Checkbox checked={allSelected} onCheckedChange={toggleAll} />
+                      <Checkbox aria-label="Listedeki tüm siparişleri seç" checked={allSelected} onCheckedChange={toggleAll} />
                     </th>
                     <th className="py-2 txt-compact-small-plus">Sipariş</th>
                     <th className="py-2 txt-compact-small-plus">Tarih</th>
@@ -508,6 +543,7 @@ const OrderBulkLabelsWidget = () => {
                     <tr key={order.id} className="border-b last:border-b-0">
                       <td className="px-6 py-2">
                         <Checkbox
+                          aria-label={`Sipariş #${order.display_id ?? order.id} seç`}
                           checked={selected.has(order.id)}
                           disabled={awaitingBankTransfer(order) || timeline.canceled}
                           onCheckedChange={() => toggle(order.id)}

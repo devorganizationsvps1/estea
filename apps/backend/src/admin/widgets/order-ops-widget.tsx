@@ -7,7 +7,8 @@ import { fetchOpsEvents, formatEventDate, OPS_KIND_LABEL, OPS_LEVEL_BADGE } from
 
 /**
  * Sipariş detayı — bu siparişin olayları (sağ sütun). Medusa'nın Aktivite kartının
- * yerini tutar (setup-admin-layouts.ts onu gizler). Kargo düğmeleri: order-shipping-widget.
+ * yerini tutar (setup-admin-layouts.ts onu gizler). Kargo düğmeleri: order-status-widget.
+ * Teknik (sistem) olaylar burada görünmez: Olay kaydı → Sistem filtresi.
  */
 const OrderOpsWidget = () => {
   const { id: orderId } = useParams()
@@ -45,7 +46,7 @@ const OrderOpsWidget = () => {
       {list.length > 5 || list.some((e) => e.detail && e.level === "info") ? (
         <div>
           <Button size="small" variant="transparent" onClick={() => setAll((v) => !v)}>
-            {all ? "Daha az göster" : `Tümünü göster (${list.length})`}
+            {all ? "Daha az göster" : list.length > 5 ? `Önceki ${list.length - 5} olayı da göster` : "Ayrıntıları göster"}
           </Button>
         </div>
       ) : null}

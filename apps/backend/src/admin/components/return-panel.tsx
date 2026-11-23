@@ -1,7 +1,9 @@
 import { Badge, Button, Checkbox, Container, Heading, Input, Label, Text, toast } from "@medusajs/ui"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
+import { formatDateTime } from "../lib/dates"
 import { formatTL } from "../lib/money"
+import { InlineConfirm, type ConfirmSpec } from "./inline-confirm"
 
 export type ReturnRow = {
   id: string
@@ -98,7 +100,7 @@ function CarrierCodeButton({
   ret: ReturnRow
   pending: boolean
   loading: boolean
-  onRenew: () => void
+  onRenew: (confirmText: string, confirmLabel: string) => void
 }) {
   const { data } = useQuery({
     queryKey: ["escay-return-code-renew", ret.id],
@@ -118,14 +120,14 @@ function CarrierCodeButton({
         variant="secondary"
         disabled={pending}
         isLoading={loading}
-        onClick={() => {
-          const ok = window.confirm(
+        onClick={() =>
+          onRenew(
             has
-              ? `Kargo firmasındaki iade kaydı (${ret.metadata?.return_code}) iptal edilip yeniden açılacak ve kod müşteriye tekrar gönderilecek. Müşteri paketi şubeye verdiyse iptal yapılmaz. Devam?`
-              : "Kargo firmasında kodlu iade açılıp kod müşteriye e-postayla gönderilecek. Devam?"
+              ? `Kargo firmasındaki iade kaydı (${ret.metadata?.return_code}) iptal edilip yeniden açılır ve yeni kod müşteriye e-postayla gider. Müşteri paketi şubeye verdiyse firma iptali kabul etmez, kod değişmez.`
+              : "Kargo firmasında kodlu iade açılır ve kod müşteriye e-postayla gider.",
+            has ? "Kodu yenile" : "Kod al ve gönder"
           )
-          if (ok) onRenew()
-        }}
+        }
       >
         {has ? "Kodu yenile" : "Kargo firmasından kod al"}
       </Button>
@@ -144,6 +146,15 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
   const [partialReasonById, setPartialReasonById] = useState<Record<string, string>>({})
   // returnId → "Kargo ücretini de iade et" işaretli mi
   const [shipById, setShipById] = useState<Record<string, boolean>>({})
+  // Açık onay kutusu: hangi iadenin hangi düğmesi (tek seferde bir tane)
+  const [pending, setPending] = useState<{ id: string; slot: string; sig?: string; spec: ConfirmSpec } | null>(null)
+  const ask = (id: string, slot: string, spec: ConfirmSpec, sig?: string) => setPending({ id, slot, sig, spec })
+  const confirmAt = (id: string, slot: string, sig?: string) => (
+    <InlineConfirm
+      spec={pending && pending.id === id && pending.slot === slot && pending.sig === sig ? pending.spec : null}
+      onClose={() => setPending(null)}
+    />
+  )
 
   const { data, isLoading } = useQuery({
     queryKey: ["escay-order-returns", orderId],
@@ -163,9 +174,6 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
             title?: string | null
             variant_title?: string | null
             quantity?: number | null
-            unit_price?: number | null
-            total?: number | null
-            refundable_total_per_unit?: number | null
           }[]
         }
       }>
@@ -176,14 +184,6 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
   const shippingTotal = Number(data?.order?.shipping_total) || 0
   const lineTitle = new Map(
     (data?.order?.items || []).map((i) => [i.id, [i.title, i.variant_title].filter(Boolean).join(" · ")])
-  )
-  // Tahmini birim iade tutarı (kesin tutar teslim alınınca sunucuda hesaplanır)
-  const unitRefund = new Map(
-    (data?.order?.items || []).map((i) => [
-      i.id,
-      Number(i.refundable_total_per_unit) ||
-        (i.total != null && i.quantity ? Number(i.total) / Number(i.quantity) : Number(i.unit_price) || 0),
-    ])
   )
   const acceptRows = (r: ReturnRow): Record<string, AcceptRow> => {
     const saved = acceptById[r.id] || {}
@@ -244,6 +244,24 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
       // Eski kod iptal edilip yenisi açılamadıysa panel "gönderildi" göstermesin diye tazele.
       qc.invalidateQueries({ queryKey: ["escay-order-returns", orderId] })
     },
+  })
+
+  const previewMut = useMutation({
+    mutationFn: async (input: { returnId: string; rows: Record<string, AcceptRow>; refundShipping: boolean }) => {
+      const res = await fetch(`/admin/returns/${input.returnId}/refund-preview`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: Object.entries(input.rows).map(([item_id, r]) => ({ item_id, quantity: r.restock + r.damaged })),
+          refund_shipping: input.refundShipping,
+        }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json?.message || `HTTP ${res.status}`)
+      return json as { mode: "card" | "manual" | "exchange"; amount: number; shipping_amount: number; shipping_included: boolean }
+    },
+    onError: (err: Error) => toast.error(`İade tutarı hesaplanamadı: ${err.message}`),
   })
 
   const receiveMut = useMutation({
@@ -364,12 +382,7 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
                 ) : null}
                 {r.created_at ? (
                   <Text size="small" className="text-ui-fg-subtle">
-                    {new Date(r.created_at).toLocaleString("tr-TR", {
-                      day: "2-digit",
-                      month: "2-digit",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
+                    {formatDateTime(r.created_at)}
                   </Text>
                 ) : null}
               </div>
@@ -405,16 +418,11 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
                   Müşteriye giden iade kodu:{" "}
                   <span className="font-mono font-medium">{r.metadata.return_code}</span>
                   {r.metadata.return_code_sent_at
-                    ? ` · ${new Date(r.metadata.return_code_sent_at).toLocaleString("tr-TR", {
-                        day: "2-digit",
-                        month: "2-digit",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}`
+                    ? `, ${formatDateTime(r.metadata.return_code_sent_at)}`
                     : ""}
-                  {r.metadata.return_code_source === "carrier" ? " · kargo firmasından" : ""}
+                  {r.metadata.return_code_source === "carrier" ? ", kargo firmasından" : ""}
                   {!r.metadata.return_code_sent_at ? (
-                    <span className="text-ui-fg-error"> · müşteriye gönderilemedi (e-posta hatası) — aşağıdan yeniden gönderin</span>
+                    <span className="text-ui-fg-error">. Müşteriye gönderilemedi (e-posta hatası); aşağıdan yeniden gönderin.</span>
                   ) : null}
                 </Text>
               ) : r.status === "requested" && !rejected ? (
@@ -427,17 +435,23 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
                   ret={r}
                   pending={renewMut.isPending}
                   loading={renewMut.isPending && renewMut.variables?.returnId === r.id}
-                  onRenew={() => renewMut.mutate({ returnId: r.id })}
+                  onRenew={(text, confirmLabel) =>
+                    ask(r.id, "renew", { text, confirmLabel, onConfirm: () => renewMut.mutate({ returnId: r.id }) })
+                  }
                 />
               ) : null}
+              {confirmAt(r.id, "renew")}
               {r.status === "requested" && !rejected && !(r.metadata?.return_code && r.metadata?.return_code_sent_at) ? (
-                <div className="flex gap-2">
-                  <Input
+                <div className="flex flex-wrap items-end gap-2">
+                  <div className="flex flex-col gap-1">
+                    <Label size="xsmall" htmlFor={`code-${r.id}`}>Kargo panelinde açtığınız iade kodu</Label>
+                    <Input
+                      id={`code-${r.id}`}
                     size="small"
-                    placeholder="İade kodu"
                     value={codeById[r.id] ?? r.metadata?.return_code ?? ""}
                     onChange={(e) => setCodeById((prev) => ({ ...prev, [r.id]: e.target.value }))}
-                  />
+                    />
+                  </div>
                   <Button
                     size="small"
                     variant="secondary"
@@ -445,16 +459,18 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
                     isLoading={codeMut.isPending && codeMut.variables?.returnId === r.id}
                     onClick={() => {
                       const code = (codeById[r.id] ?? r.metadata?.return_code ?? "").trim()
-                      const ok = window.confirm(
-                        `"${code}" kodu müşteriye e-postayla gönderilecek (iade kodu ile kargo şubesine teslim). Devam?`
-                      )
-                      if (ok) codeMut.mutate({ returnId: r.id, code })
+                      ask(r.id, "code", {
+                        text: `"${code}" kodu müşteriye e-postayla gider; müşteri paketi bu kodla kargo şubesine verir.`,
+                        confirmLabel: "Kodu gönder",
+                        onConfirm: () => codeMut.mutate({ returnId: r.id, code }),
+                      })
                     }}
                   >
                     Kodu müşteriye gönder
                   </Button>
                 </div>
               ) : null}
+              {confirmAt(r.id, "code")}
               {r.status === "requested" && !rejected
                 ? (() => {
                     const rows = acceptRows(r)
@@ -467,16 +483,16 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
                       const row = rows[it.item_id as string]
                       return s + row.restock + row.damaged
                     }, 0)
-                    const estimate = entries.reduce((s, it) => {
-                      const row = rows[it.item_id as string]
-                      return s + (unitRefund.get(it.item_id as string) || 0) * (row.restock + row.damaged)
-                    }, 0)
+                    const ship = Boolean(shipById[r.id]) && shippingTotal > 0
+                    const exchange = Boolean(r.metadata?.escay_exchange && r.metadata.escay_exchange.status !== "canceled")
+                    // Adetler değişirse açık onay geçersiz olur (tutar eski kalmasın).
+                    const sig = JSON.stringify([rows, ship])
                     return (
-                      <div className="flex flex-col gap-2 rounded-md bg-ui-bg-subtle p-3">
+                      <div className="flex flex-col gap-2 border-t border-ui-border-base pt-3">
                         <Text size="small" weight="plus">
                           Paket geldiğinde
                         </Text>
-                        <Text size="xsmall" className="text-ui-fg-subtle">
+                        <Text size="small">
                           Paket gelince adetleri yazın. Sağlam ürün stoğa döner, hasarlı ürün stoğa girmez; ikisinin de parası iade edilir. Yazmadığınız adet kabul edilmemiş sayılır.
                         </Text>
                         {entries.map((it) => {
@@ -489,8 +505,9 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
                                 {it.quantity} × {lineTitle.get(id) || "Ürün"}
                               </Text>
                               <div className="flex flex-wrap items-center gap-2">
-                                <Text size="xsmall">Sağlam (stoğa döner)</Text>
+                                <Label size="xsmall" htmlFor={`restock-${r.id}-${id}`}>Sağlam (stoğa döner)</Label>
                                 <Input
+                                  id={`restock-${r.id}-${id}`}
                                   size="small"
                                   type="number"
                                   min={0}
@@ -499,8 +516,9 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
                                   onChange={(e) => setAccept(r, id, { restock: Number(e.target.value) })}
                                   className="w-[60px]"
                                 />
-                                <Text size="xsmall">Hasarlı (stoğa girmez)</Text>
+                                <Label size="xsmall" htmlFor={`damaged-${r.id}-${id}`}>Hasarlı (stoğa girmez)</Label>
                                 <Input
+                                  id={`damaged-${r.id}-${id}`}
                                   size="small"
                                   type="number"
                                   min={0}
@@ -521,6 +539,7 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
                         {rejectedQty > 0 ? (
                           <Input
                             size="small"
+                            aria-label="Kabul edilmeme sebebi"
                             placeholder="Kabul edilmeme sebebi (müşteriye mailde görünür)"
                             value={partialReasonById[r.id] || ""}
                             onChange={(e) => setPartialReasonById((prev) => ({ ...prev, [r.id]: e.target.value }))}
@@ -538,37 +557,68 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
                             </Label>
                           </div>
                         ) : null}
-                        {accepted > 0 && estimate > 0 ? (
-                          <Text size="xsmall" className="text-ui-fg-subtle">
-                            İade edilecek: yaklaşık {formatTL(estimate + (shipById[r.id] ? shippingTotal : 0))}
-                            {shipById[r.id] ? " (kargo dahil)" : ""}
-                          </Text>
-                        ) : null}
-                        <Button
-                          variant="primary"
-                          size="small"
-                          isLoading={receiveMut.isPending && receiveMut.variables?.ret.id === r.id}
-                          disabled={receiveMut.isPending || accepted === 0}
-                          onClick={() => {
-                            const summary = entries
-                              .map((it) => {
+                        <div>
+                          <Button
+                            variant="primary"
+                            size="small"
+                            isLoading={
+                              (previewMut.isPending && previewMut.variables?.returnId === r.id) ||
+                              (receiveMut.isPending && receiveMut.variables?.ret.id === r.id)
+                            }
+                            disabled={receiveMut.isPending || previewMut.isPending || accepted === 0}
+                            onClick={async () => {
+                              // Kesin tutar sunucudan: gerçek iadeyle aynı hesap.
+                              const preview = await previewMut.mutateAsync({ returnId: r.id, rows, refundShipping: ship }).catch(() => null)
+                              if (!preview) return
+                              const lines = entries.map((it) => {
                                 const row = rows[it.item_id as string]
                                 const left = Number(it.quantity || 0) - row.restock - row.damaged
-                                return `• ${lineTitle.get(it.item_id as string) || "Ürün"}: ${row.restock} stoğa, ${row.damaged} hasarlı, ${left} kabul edilmedi`
+                                return `${lineTitle.get(it.item_id as string) || "Ürün"}: ${[
+                                  row.restock ? `${row.restock} adet stoğa döner` : null,
+                                  row.damaged ? `${row.damaged} adet hasarlı (stoğa girmez)` : null,
+                                  left ? `${left} adet kabul edilmedi (parası iade edilmez)` : null,
+                                ]
+                                  .filter(Boolean)
+                                  .join(", ")}`
                               })
-                              .join("\n")
-                            const ship = shipById[r.id] && shippingTotal > 0
-                            const exchange = Boolean(r.metadata?.escay_exchange && r.metadata.escay_exchange.status !== "canceled")
-                            const ok = window.confirm(
-                              exchange
-                                ? `${summary}\n\nDEĞİŞİM: para iadesi yapılmaz; kabul edilen adet kadar yeni ürünün gönderisi otomatik açılır. Devam?`
-                                : `${summary}${ship ? `\n• Kargo ücreti de iade edilecek: ${formatTL(shippingTotal)}` : ""}\n\nKabul edilen ürünlerin parası müşterinin kartına OTOMATİK iade edilir (havale siparişinde elle). Kabul edilmeyenler için para iadesi yapılmaz. Devam?`
-                            )
-                            if (ok) receiveMut.mutate({ ret: r, rows, reason: partialReasonById[r.id] || "", refundShipping: Boolean(ship) })
-                          }}
-                        >
-                          {rejectedQty > 0 ? "Seçilenleri teslim al ve parasını iade et" : "Paket geldi — teslim al ve parayı iade et"}
-                        </Button>
+                              if (preview.shipping_included) lines.push(`Kargo ücreti dahil: ${formatTL(preview.shipping_amount)}`)
+                              const run = () =>
+                                receiveMut.mutate({ ret: r, rows, reason: partialReasonById[r.id] || "", refundShipping: ship })
+                              ask(
+                                r.id,
+                                "receive",
+                                preview.mode === "exchange"
+                                  ? {
+                                      text: "Değişim: para iadesi yapılmaz. Kabul edilen adet kadar yeni ürünün gönderisi kendiliğinden açılır.",
+                                      lines,
+                                      confirmLabel: "Teslim al",
+                                      onConfirm: run,
+                                    }
+                                  : preview.mode === "manual"
+                                    ? {
+                                        amountLabel: "Elle iade edilecek tutar",
+                                        amount: formatTL(preview.amount),
+                                        text: "Bu siparişte otomatik kart iadesi yapılamıyor (ödeme PayTR kartıyla alınmamış ya da tutar doğrulanamadı). Teslim alınca tutarı kontrol edip müşteriye elle iade edin.",
+                                        lines,
+                                        confirmLabel: "Teslim al",
+                                        onConfirm: run,
+                                      }
+                                    : {
+                                        amountLabel: "Müşterinin kartına iade edilecek",
+                                        amount: formatTL(preview.amount),
+                                        text: "Onaylayınca tutar karta otomatik iade edilir. Geri alınamaz.",
+                                        lines,
+                                        confirmLabel: `Teslim al ve ${formatTL(preview.amount)} iade et`,
+                                        onConfirm: run,
+                                      },
+                                sig
+                              )
+                            }}
+                          >
+                            {exchange ? "Paket geldi, teslim al" : rejectedQty > 0 ? "Seçilenleri teslim al ve parasını iade et" : "Paket geldi, teslim al ve parayı iade et"}
+                          </Button>
+                        </div>
+                        {confirmAt(r.id, "receive", sig)}
                       </div>
                     )
                   })()
@@ -631,6 +681,7 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
                           Ürün iade şartlarına uymuyorsa. Para iadesi yapılmaz, müşteriye ret maili gider.
                         </Text>
                         <Input
+                          aria-label="Red sebebi"
                           placeholder="Red sebebi (müşteriye mailde görünür)"
                           value={reasonById[r.id] || ""}
                           onChange={(e) =>
@@ -647,16 +698,20 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
                             className="text-ui-fg-error"
                             isLoading={rejectMut.isPending && rejectMut.variables?.returnId === r.id}
                             disabled={rejectMut.isPending}
-                            onClick={() => {
-                              const ok = window.confirm(
-                                "İade reddedilecek: para iadesi yapılmaz ve müşteriye ret maili gider. Bu işlem geri alınamaz. Devam?"
-                              )
-                              if (ok) rejectMut.mutate({ returnId: r.id, reason: reasonById[r.id] || "" })
-                            }}
+                            onClick={() =>
+                              ask(r.id, "reject", {
+                                text: "İade reddedilir: para iadesi yapılmaz ve müşteriye ret maili gider. Geri alınamaz.",
+                                lines: reasonById[r.id]?.trim() ? [`Müşteriye giden sebep: ${reasonById[r.id].trim()}`] : undefined,
+                                confirmLabel: "İadeyi reddet",
+                                danger: true,
+                                onConfirm: () => rejectMut.mutate({ returnId: r.id, reason: reasonById[r.id] || "" }),
+                              })
+                            }
                           >
                             İadeyi reddet
                           </Button>
                         </div>
+                        {confirmAt(r.id, "reject")}
                       </div>
                       {r.status === "requested" && !rejected ? (
                         <div className="flex flex-col gap-2">
@@ -672,16 +727,19 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
                               variant="secondary"
                               isLoading={cancelMut.isPending && cancelMut.variables?.returnId === r.id}
                               disabled={cancelMut.isPending}
-                              onClick={() => {
-                                const ok = window.confirm(
-                                  "İade talebi iptal edilecek. Para iadesi yapılmaz, müşteriye mail gitmez; gönderilen iade kodu kullanılmamalı. Devam?"
-                                )
-                                if (ok) cancelMut.mutate({ returnId: r.id })
-                              }}
+                              onClick={() =>
+                                ask(r.id, "cancel", {
+                                  text: "İade talebi iptal edilir. Para iadesi yapılmaz, müşteriye mail gitmez; gönderilmiş iade kodu artık kullanılmamalı.",
+                                  confirmLabel: "Talebi iptal et",
+                                  danger: true,
+                                  onConfirm: () => cancelMut.mutate({ returnId: r.id }),
+                                })
+                              }
                             >
                               Talebi iptal et
                             </Button>
                           </div>
+                          {confirmAt(r.id, "cancel")}
                         </div>
                       ) : null}
                     </div>

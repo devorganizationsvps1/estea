@@ -1,4 +1,5 @@
 import { defineWidgetConfig } from "@medusajs/admin-sdk"
+import { formatDateTime } from "../lib/dates"
 import { Badge, Button, Container, Heading, Text, toast, usePrompt } from "@medusajs/ui"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useParams } from "react-router-dom"
@@ -103,7 +104,7 @@ const BankTransferWidget = () => {
       ) : null}
       {data.state === "received" && data.received_at ? (
         <Text size="small" className="text-ui-fg-subtle mt-1 block">
-          Onay: {new Date(data.received_at).toLocaleString("tr-TR")}
+          Onay: {formatDateTime(data.received_at)}
         </Text>
       ) : null}
       {data.state === "received" ? (

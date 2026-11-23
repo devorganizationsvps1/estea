@@ -1,4 +1,6 @@
 import { defineWidgetConfig } from "@medusajs/admin-sdk"
+import { InlineConfirm, type ConfirmSpec } from "../components/inline-confirm"
+import { formatDateTime } from "../lib/dates"
 import { formatTL } from "../lib/money"
 import { Badge, Button, Container, Heading, Text } from "@medusajs/ui"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
@@ -64,6 +66,7 @@ const BizimhesapInvoiceWidget = () => {
   const { id: orderId } = useParams()
   const qc = useQueryClient()
   const [retryMsg, setRetryMsg] = useState<string | null>(null)
+  const [confirm, setConfirm] = useState<ConfirmSpec | null>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ["escay-order-bizimhesap", orderId],
@@ -185,7 +188,7 @@ const BizimhesapInvoiceWidget = () => {
             ) : null}
             {inv.at ? (
               <Text size="small" className="text-ui-fg-subtle">
-                {new Date(inv.at).toLocaleString("tr-TR")}
+                {formatDateTime(inv.at)}
               </Text>
             ) : null}
           </>
@@ -198,16 +201,16 @@ const BizimhesapInvoiceWidget = () => {
               variant="secondary"
               disabled={retryMut.isPending}
               onClick={() => {
-                if (
-                  uncertain &&
-                  !window.confirm(
-                    `BizimHesap panelinde ${inv?.invoice_no || "bu sipariş"} için kayıt olmadığını kontrol ettiniz mi? Kayıt varsa çift fatura oluşur.`
-                  )
-                ) {
-                  return
+                const send = () => {
+                  setRetryMsg(null)
+                  retryMut.mutate(uncertain)
                 }
-                setRetryMsg(null)
-                retryMut.mutate(uncertain)
+                if (!uncertain) return send()
+                setConfirm({
+                  text: `Önce BizimHesap panelinde ${inv?.invoice_no || "bu sipariş"} için kayıt olmadığını kontrol edin. Kayıt varsa çift fatura oluşur.`,
+                  confirmLabel: "Panelde yok, yeniden gönder",
+                  onConfirm: send,
+                })
               }}
             >
               {retryMut.isPending
@@ -216,6 +219,9 @@ const BizimhesapInvoiceWidget = () => {
                   ? "Panelde yok, yeniden gönder"
                   : "Yeniden gönder"}
             </Button>
+            <div className="mt-2">
+              <InlineConfirm spec={confirm} onClose={() => setConfirm(null)} />
+            </div>
             {retryMsg ? (
               <Text size="small" className="mt-1 block text-ui-fg-subtle">
                 {retryMsg}

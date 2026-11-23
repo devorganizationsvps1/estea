@@ -5,7 +5,10 @@
     "values_other": "{{count}} değer",
     "quantityPrice": "Adet fiyatı",
     "exclusive": "Ürüne özel",
-    "global": "Genel"
+    "global": "Genel",
+    "of": "/",
+    "results": "kayıt",
+    "pages": "sayfa"
   },
   "actions": {
     "show": "Göster",

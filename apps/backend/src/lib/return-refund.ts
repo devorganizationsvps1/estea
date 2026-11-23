@@ -217,6 +217,37 @@ export function calculateReturnRefundAmount(input: {
   }
 }
 
+/** İade tutarı için siparişten okunan alanlar (önizleme de aynısını okur: lib/return-refund-preview.ts). */
+export const REFUND_ORDER_FIELDS = [
+  "id",
+  "shipping_total",
+  "currency_code",
+  "items.id",
+  "items.unit_price",
+  "items.quantity",
+  "items.total",
+  "items.metadata",
+  "items.is_tax_inclusive",
+  "items.adjustments.amount",
+  "items.tax_lines.rate",
+  // detail.* çalışmaz: adet ve iade alanları tek tek istenmeli, yoksa quantity/total boş gelir
+  "items.detail.quantity",
+  "items.detail.return_requested_quantity",
+  "items.detail.return_received_quantity",
+  "items.detail.return_dismissed_quantity",
+  "items.detail.fulfilled_quantity",
+  "items.refundable_total_per_unit",
+  "payment_collections.id",
+  "payment_collections.payments.id",
+  "payment_collections.payments.provider_id",
+  "payment_collections.payments.amount",
+  "payment_collections.payments.captures.*",
+  "payment_collections.payments.refunds.*",
+  "returns.id",
+  "returns.metadata",
+  "returns.status",
+]
+
 async function markReturnRefund(
   scope: MedusaContainer,
   returnId: string,
@@ -420,35 +451,7 @@ async function processReturnRefundUnlocked(
 
   const { data: orders } = await query.graph({
     entity: "order",
-    fields: [
-      "id",
-      "shipping_total",
-      "currency_code",
-      "items.id",
-      "items.unit_price",
-      "items.quantity",
-      "items.total",
-      "items.metadata",
-      "items.is_tax_inclusive",
-      "items.adjustments.amount",
-      "items.tax_lines.rate",
-      // detail.* çalışmaz: adet ve iade alanları tek tek istenmeli, yoksa quantity/total boş gelir
-      "items.detail.quantity",
-      "items.detail.return_requested_quantity",
-      "items.detail.return_received_quantity",
-      "items.detail.return_dismissed_quantity",
-      "items.detail.fulfilled_quantity",
-      "items.refundable_total_per_unit",
-      "payment_collections.id",
-      "payment_collections.payments.id",
-      "payment_collections.payments.provider_id",
-      "payment_collections.payments.amount",
-      "payment_collections.payments.captures.*",
-      "payment_collections.payments.refunds.*",
-      "returns.id",
-      "returns.metadata",
-      "returns.status",
-    ],
+    fields: REFUND_ORDER_FIELDS,
     filters: { id: orderId },
   })
 

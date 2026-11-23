@@ -3,11 +3,13 @@ import {
   MedusaResponse,
 } from "@medusajs/framework/http"
 import { OPS_EVENT_MODULE } from "../../../modules/ops-event"
+import { opsKindFilter } from "../../../lib/ops-events"
 import type OpsEventModuleService from "../../../modules/ops-event/service"
 
 /**
  * Admin: GET /admin/ops-events?level=(info|warning|error|important)&kind=&order_id=&limit=&offset=
  * Olay kaydı (en yeni önce). kind öneki desteklenir: kind=payment → payment.*
+ * Teknik olaylar (lib/ops-events.ts SYSTEM_EVENT_KINDS) yalnız kind=system ile gelir.
  */
 export const GET = async (req: AuthenticatedMedusaRequest, res: MedusaResponse) => {
   const q = req.query as Record<string, string | undefined>
@@ -18,7 +20,7 @@ export const GET = async (req: AuthenticatedMedusaRequest, res: MedusaResponse) 
   // "important": bakılması gerekenler (hata + uyarı), bilgi satırları hariç
   if (q.level === "important") filters.level = ["warning", "error"]
   if (q.order_id) filters.order_id = q.order_id
-  if (q.kind) filters.kind = q.kind.includes(".") ? q.kind : { $like: `${q.kind}.%` }
+  filters.kind = opsKindFilter(q.kind)
 
   const service = req.scope.resolve<OpsEventModuleService>(OPS_EVENT_MODULE)
   const [events, count] = await service.listAndCountOpsEvents(filters, {

@@ -16,6 +16,7 @@ import {
 import { rejectStoreReturn } from "../../src/lib/return-rejection"
 import { acceptReturnItems } from "../../src/lib/return-acceptance"
 import { processReturnRefund, paidPricePerUnit } from "../../src/lib/return-refund"
+import { previewReturnRefund } from "../../src/lib/return-refund-preview"
 import { createPromotionsWorkflow } from "@medusajs/medusa/core-flows"
 
 jest.setTimeout(120 * 1000)
@@ -354,6 +355,16 @@ medusaIntegrationTestRunner({
         const created = await postGuestReturn(order.id, email, itemId)
         expect(statusOf(created)).toEqual(200)
         const returnId = (created as { data: { return: { id: string } } }).data.return.id
+        // Onay kutusunda gösterilen tutar (önizleme) gerçek iadeyle aynı olmalı; hiçbir şey yazmaz.
+        const preview = await previewReturnRefund(getContainer(), {
+          return_id: returnId,
+          items: [{ item_id: itemId, quantity: 1 }],
+          refund_shipping: false,
+        })
+        expect(preview).toMatchObject({ mode: "card", certain: true, items_amount: perUnit, shipping_included: false })
+        const none = await previewReturnRefund(getContainer(), { return_id: returnId, items: [], refund_shipping: false })
+        expect(none.amount).toBe(0)
+
         await acceptReturnItems(getContainer(), {
           return_id: returnId,
           items: [{ item_id: itemId, restock_quantity: 1, damaged_quantity: 0 }],
@@ -361,6 +372,7 @@ medusaIntegrationTestRunner({
         const result = await processReturnRefund(getContainer(), { return_id: returnId })
         expect(result.meta.status).toBe("success")
         expect(result.meta.items_amount).toBe(perUnit)
+        expect(result.meta.amount).toBe(preview.amount)
         expect(result.meta.amount).toBeLessThan(Number((before as any).total) - Number((before as any).shipping_total))
       })
 

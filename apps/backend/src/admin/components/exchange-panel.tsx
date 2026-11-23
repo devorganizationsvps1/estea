@@ -1,6 +1,8 @@
 import { Badge, Button, Container, Heading, Text, toast } from "@medusajs/ui"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
+import { formatDateTime } from "../lib/dates"
+import { InlineConfirm, type ConfirmSpec } from "./inline-confirm"
 
 import { exchangeDisplayState, readExchange, type ExchangeMeta } from "../../lib/exchange-plan"
 import { ExchangeForm, EXCHANGE_STATE_BADGE, postJson, type ExchangeFormLine } from "./exchange-form"
@@ -30,7 +32,7 @@ type OptionsItem = {
 }
 
 const fmt = (d?: string | null) =>
-  d ? new Date(d).toLocaleString("tr-TR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""
+  formatDateTime(d)
 
 /**
  * Değişim kutusu. İki kullanım:
@@ -54,6 +56,7 @@ export const ExchangePanel = ({
   const qc = useQueryClient()
   const [mode, setMode] = useState<null | "new" | `convert:${string}`>(null)
   const [busy, setBusy] = useState<string | null>(null)
+  const [pending, setPending] = useState<{ id: string; spec: ConfirmSpec } | null>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ["escay-order-exchange", orderId],
@@ -245,18 +248,25 @@ export const ExchangePanel = ({
                         )
                       }
                     >
-                      Etiket + fiş
+                      Etiket ve fişi yazdır
                     </Button>
                     <Button
                       size="small"
                       variant="secondary"
                       disabled={busy !== null}
-                      onClick={() => {
-                        if (window.confirm("Mevcut gönderi iptal edilip yenisi açılacak (eski etiket geçersiz). Devam?"))
-                          void run(`reship:${r.id}`, () => postJson(`/admin/returns/${r.id}/exchange/reship`), "Gönderi yeniden açıldı")
-                      }}
+                      onClick={() =>
+                        setPending({
+                          id: r.id,
+                          spec: {
+                            text: "Mevcut gönderi firmada iptal edilir ve yenisi açılır. Eski etiket geçersiz olur.",
+                            confirmLabel: "Gönderiyi yeniden aç",
+                            onConfirm: () =>
+                              void run(`reship:${r.id}`, () => postJson(`/admin/returns/${r.id}/exchange/reship`), "Gönderi yeniden açıldı"),
+                          },
+                        })
+                      }
                     >
-                      Yeniden aç
+                      Gönderiyi yeniden aç
                     </Button>
                   </>
                 ) : null}
@@ -267,18 +277,25 @@ export const ExchangePanel = ({
                     disabled={busy !== null}
                     onClick={() => {
                       const received = state !== "awaiting_return"
-                      const ok = window.confirm(
-                        received
-                          ? "Değişim iptal edilecek. Ürün teslim alındığı için parası iade edilsin mi? (Tamam = para iadesi yap, İptal = vazgeç)"
-                          : "Değişim iptal edilecek; iade normal iade olarak sürer (ürün gelince para iadesi). Devam?"
-                      )
-                      if (ok) void run(`cancel:${r.id}`, () => postJson(`/admin/returns/${r.id}/exchange/cancel`, { refund: received }), "Değişim iptal edildi")
+                      setPending({
+                        id: r.id,
+                        spec: {
+                          text: received
+                            ? "Değişim iptal edilir. Ürün teslim alındığı için parası müşteriye iade edilir. Geri alınamaz."
+                            : "Değişim iptal edilir; talep normal iade olarak sürer (ürün gelince parası iade edilir).",
+                          confirmLabel: received ? "Değişimi iptal et ve parayı iade et" : "Değişimi iptal et",
+                          danger: true,
+                          onConfirm: () =>
+                            void run(`cancel:${r.id}`, () => postJson(`/admin/returns/${r.id}/exchange/cancel`, { refund: received }), "Değişim iptal edildi"),
+                        },
+                      })
                     }}
                   >
                     Değişimi iptal et
                   </Button>
                 ) : null}
               </div>
+              <InlineConfirm spec={pending?.id === r.id ? pending.spec : null} onClose={() => setPending(null)} />
             </div>
           )
         })}

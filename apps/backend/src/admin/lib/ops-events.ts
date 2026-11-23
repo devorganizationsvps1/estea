@@ -1,5 +1,7 @@
 /** Admin — olay kaydı ortak tipler ve etiketler (backend src/lib/ops-events.ts ile aynı türler). */
 
+import { formatDateTime } from "./dates"
+
 export type OpsEvent = {
   id: string
   kind: string
@@ -41,6 +43,8 @@ export const OPS_KIND_LABEL: Record<string, string> = {
   "contract.failed": "Sözleşme PDF'i oluşturulamadı",
   "invoice.failed": "Fatura oluşturulamadı",
   "invoice.refund_manual": "İade faturası elle kesilecek",
+  "stock.sync": "Stok eşitleme",
+  "mail.failed": "Mail gönderilemedi",
 }
 
 export const OPS_LEVEL_BADGE: Record<OpsEvent["level"], { label: string; color: "green" | "orange" | "red" | "grey" }> = {
@@ -49,15 +53,7 @@ export const OPS_LEVEL_BADGE: Record<OpsEvent["level"], { label: string; color: 
   error: { label: "Hata", color: "red" },
 }
 
-export function formatEventDate(value: string): string {
-  return new Date(value).toLocaleString("tr-TR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  })
-}
+export const formatEventDate = (value: string): string => formatDateTime(value)
 
 export async function fetchOpsEvents(params: Record<string, string | number | undefined>) {
   const qs = new URLSearchParams()

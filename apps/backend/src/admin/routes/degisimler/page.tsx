@@ -136,6 +136,7 @@ const ExchangesPage = () => {
       ) : rows.length === 0 ? (
         <Text size="small" className="px-6 py-4 text-ui-fg-subtle">Bu durumda değişim yok.</Text>
       ) : (
+        <div className="overflow-x-auto">
         <Table>
           <Table.Header>
             <Table.Row>
@@ -170,6 +171,7 @@ const ExchangesPage = () => {
                   <Table.Cell>
                     {r.state === "label_ready" ? (
                       <Checkbox
+                        aria-label={`${r.order_label} etiketini seç`}
                         checked={selected.has(r.key)}
                         onCheckedChange={(v) =>
                           setSelected((prev) => {
@@ -184,7 +186,13 @@ const ExchangesPage = () => {
                   </Table.Cell>
                   <Table.Cell className="whitespace-nowrap">{formatEventDate(r.requested_at)}</Table.Cell>
                   <Table.Cell>
-                    <Link to={r.return_id ? `/degisimler/${r.return_id}` : r.order_link} className="text-ui-fg-interactive">{r.order_label}</Link>
+                    <Link
+                      to={r.return_id ? `/degisimler/${r.return_id}` : r.order_link}
+                      aria-label={`${r.order_label} değişimini aç`}
+                      className="-my-2 inline-flex min-h-[40px] min-w-[44px] items-center text-ui-fg-interactive"
+                    >
+                      {r.order_label}
+                    </Link>
                   </Table.Cell>
                   <Table.Cell>
                     <div className="txt-compact-small-plus">{r.customer || "—"}</div>
@@ -203,7 +211,7 @@ const ExchangesPage = () => {
                     {r.state === "awaiting_return" ? (
                       <div className={`txt-compact-small ${r.return_code && r.return_code_sent !== false ? "text-ui-fg-subtle" : "text-ui-fg-error"}`}>
                         {r.return_code
-                          ? `İade kodu: ${r.return_code}${r.return_code_sent === false ? " · müşteriye gönderilemedi" : ""}`
+                          ? `İade kodu: ${r.return_code}${r.return_code_sent === false ? ", müşteriye gönderilemedi" : ""}`
                           : "İade kodu gönderilmedi"}
                       </div>
                     ) : null}
@@ -211,7 +219,7 @@ const ExchangesPage = () => {
                       <div className="txt-compact-small text-ui-fg-subtle">Takip: {r.shipment.tracking_number}</div>
                     ) : null}
                     {r.label_printed_at ? (
-                      <div className="txt-compact-small text-ui-fg-subtle">Etiket basıldı {formatEventDate(r.label_printed_at)}</div>
+                      <div className="txt-compact-small text-ui-fg-subtle">Etiket {formatEventDate(r.label_printed_at)} tarihinde yazdırıldı</div>
                     ) : null}
                     {r.error ? <div className="txt-compact-small text-ui-fg-error">{r.error}</div> : null}
                   </Table.Cell>
@@ -231,6 +239,7 @@ const ExchangesPage = () => {
             })}
           </Table.Body>
         </Table>
+        </div>
       )}
     </Container>
   )
