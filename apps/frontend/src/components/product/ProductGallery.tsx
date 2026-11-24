@@ -246,13 +246,30 @@ export function ProductGallery({
 
   if (verified === null) {
     // Same footprint as the final gallery so the page doesn't jump.
+    // İlk görsel sunucudan çıkan HTML'de: tarayıcı onu hemen indirir. Boş kutu
+    // beklenseydi sayfanın ana görseli ancak script inip adresler yoklandıktan
+    // sonra istenirdi (yavaş 4G'de LCP 5,9 sn). Aynı sizes: galeri kurulunca
+    // aynı dosya önbellekten gelir.
     return (
       <div
         className={`${styles.galleryWrap}${square ? ` ${styles.galleryWrapSquare}` : ""}`}
         aria-busy="true"
       >
         <div className={styles.galleryScroll}>
-          <div className={styles.galleryPlaceholder} />
+          <div className={styles.galleryPlaceholder}>
+            {images[0] ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                {...optimizedImg(images[0], "(min-width: 900px) 50vw, 100vw")}
+                alt={`${productTitle} 1`}
+                className={styles.galleryImg}
+                loading="eager"
+                decoding="async"
+                fetchPriority="high"
+                draggable={false}
+              />
+            ) : null}
+          </div>
         </div>
       </div>
     )

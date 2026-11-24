@@ -333,7 +333,7 @@
   cursor: pointer;
 }
 
-.cardSoldOut .photo[data-deferred-state="loaded"] {
+.cardSoldOut .photo:not(.photoHover) {
   opacity: 0.55;
 }
 
@@ -367,14 +367,16 @@
   object-position: center;
   background: transparent;
   mix-blend-mode: multiply;
-  opacity: 0;
+  /* Baştan görünür: "loaded" durumu ancak hydration'dan sonra yazılır; ona bağlı
+     kalsaydı inmiş fotoğraf script gelene dek gizli kalırdı (yavaş 4G'de ~1 sn). */
+  opacity: 1;
   transition:
     opacity 0.35s ease,
     transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.photo[data-deferred-state="loaded"] {
-  opacity: 1;
+.photo[data-deferred-state="error"] {
+  opacity: 0;
 }
 
 .card:hover .photo:not(.photoHover) {

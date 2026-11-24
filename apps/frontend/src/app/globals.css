@@ -42,8 +42,9 @@
 }
 
 :root {
-  /* Fontsource (layout.tsx) — tek aile, 400–800 */
-  --font-figtree: "Figtree Variable", system-ui, sans-serif;
+  /* lib/fonts.ts (next/font, yerel) — tek aile, 400–800. "Figtree Variable Fallback": font inene dek
+     ölçüleri eşlenmiş Arial; indiğinde satırlar yer değiştirmez. */
+  --font-figtree: "Figtree Variable", "Figtree Variable Fallback", system-ui, sans-serif;
   --font-sans: var(--font-figtree), ui-sans-serif, system-ui, sans-serif;
   --font-display: var(--font-figtree), ui-sans-serif, system-ui, sans-serif;
 

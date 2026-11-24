@@ -32,6 +32,16 @@ function optimizable(src: string): string | null {
   return null
 }
 
+/** Göreli yol ya da mutlak adresin yol kısmı; çözülemezse null. */
+function publicPath(src: string): string | null {
+  if (src.startsWith("/") && !src.startsWith("//")) return src
+  try {
+    return new URL(src).pathname
+  } catch {
+    return null
+  }
+}
+
 export type OptimizedImg = { src?: string; srcSet?: string; sizes?: string }
 
 /**
@@ -40,12 +50,15 @@ export type OptimizedImg = { src?: string; srcSet?: string; sizes?: string }
  */
 export function optimizedImg(src: string | null | undefined, sizes: string): OptimizedImg {
   if (!src) return {}
+  // public/ görseli build'de üretildiyse optimizer'a hiç gitme. Tek <img>'de
+  // biçim seçilemez; WebP her tarayıcıda açılır. Eşleşme yalnız dosya yoluna bakar:
+  // ürün görsellerinin adresi veritabanında import anındaki host'la durur (IP,
+  // traefik.me, localhost); host SITE_HOST değilse görsel ham JPEG giderdi
+  // (kartta 35-270 KB). Yol manifestteyse dosya bizim public/ klasörümüzdedir.
+  const local = mediaImage(publicPath(src))
+  if (local) return { src: local.src, srcSet: local.webp, sizes }
   const target = optimizable(src)
   if (!target) return { src }
-  // public/ görseli build'de üretildiyse optimizer'a hiç gitme. Tek <img>'de
-  // biçim seçilemez; WebP her tarayıcıda açılır.
-  const local = target.startsWith("/") ? mediaImage(target) : null
-  if (local) return { src: local.src, srcSet: local.webp, sizes }
   const { props } = getImageProps({ src: target, alt: "", fill: true, sizes })
   return { src: props.src, srcSet: props.srcSet, sizes: props.sizes }
 }

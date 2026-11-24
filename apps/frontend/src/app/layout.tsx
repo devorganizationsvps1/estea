@@ -1,8 +1,8 @@
 import type { Metadata, Viewport } from "next"
 import Script from "next/script"
-// Fontlar npm'den (Fontsource): build Google Fonts'a bağlı değil, latin-ext (ş, ğ, ı) dahil.
+// Figtree repoda, next/font ile (preload + kalıcı önbellek); ayrıntı lib/fonts.ts.
 // Aileler globals.css :root'ta --font-* değişkenleriyle tanımlı.
-import "@fontsource-variable/figtree/wght.css"
+import "@/lib/fonts"
 import { Analytics } from "@/components/Analytics"
 import { BackToTop } from "@/components/BackToTop"
 import RevealInit from "@/components/brand/RevealInit"

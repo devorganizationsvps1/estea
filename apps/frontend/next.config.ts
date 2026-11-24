@@ -53,8 +53,10 @@ const nextConfig: NextConfig = {
     return [
       { source: "/:path*", headers: securityHeaders },
       // Adı sabit public dosyaları: Next varsayılanı max-age=0 (her açılışta sorulur).
+      // /_next ve /_m hariç: oradaki dosyaların adı hash'li, Next onları zaten bir yıl
+      // `immutable` sunar; bu kural onlara da uyarsa fontlar bir saate düşer.
       {
-        source: "/:path*\\.:ext(jpg|jpeg|png|webp|avif|svg|mp4|webm|woff2)",
+        source: "/:path((?!_next/|_m/).*)\\.:ext(jpg|jpeg|png|webp|avif|svg|mp4|webm|woff2)",
         headers: [{ key: "Cache-Control", value: "public, max-age=3600, stale-while-revalidate=86400" }],
       },
       // Görsel hattı çıktısı: adında içerik hash'i var, asla değişmez.

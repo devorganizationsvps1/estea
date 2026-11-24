@@ -51,6 +51,13 @@
   object-fit: cover;
 }
 
+/* Sonraki slaytlar ilkinden bir piksel kısa çizilir. Hepsi aynı boyda olunca tarayıcı
+   6,5 sn sonra beliren ikinci slaytı "en büyük içerik" sayabiliyor (ölçülen LCP 11 sn);
+   sayfanın gerçek ilk görseli birinci slayt. Alttaki tek satır zemin rengiyle dolar. */
+.hero-slider__slide:not(:first-child) .hero-slider__img {
+  clip-path: inset(0 0 1px 0);
+}
+
 .hero-slider__scrim {
   position: absolute;
   inset: 0;
