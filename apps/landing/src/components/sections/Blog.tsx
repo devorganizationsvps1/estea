@@ -20,6 +20,7 @@ export default function Blog() {
               alt=""
               width={341}
               height={182}
+              sizes="180px"
               className="h-20 w-auto -rotate-[8deg] drop-shadow-[0_8px_14px_rgba(0,0,0,0.22)] sm:h-24"
             />
             <h2 id="blog-baslik" className="headline mt-8 text-[clamp(2.2rem,2.7vw,2.9rem)] leading-[0.95] tracking-[-0.025em] text-ink">

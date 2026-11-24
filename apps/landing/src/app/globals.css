@@ -56,6 +56,13 @@
   }
 }
 
+/* Esçay çizgi deseni (Raf ve Yolculuk zemini). Adres göreli: bundler dosyayı hash'li
+   adla /_next/static/media'ya koyar, bir yıl önbelleklenir. Dosya kayıpsız WebP (54 KB);
+   AVIF ve kayıplı WebP denemeleri çizgi sanatında daha büyük çıktı. */
+.escay-pattern {
+  background-image: url('../../public/pattern/escay-vector.webp');
+}
+
 /* Tagline band: the track holds two copies, so -50% loops seamlessly. */
 .marquee {
   animation: marquee 40s linear infinite;
@@ -169,12 +176,37 @@
   transform: none;
 }
 
+/* İlk ekrandaki bloklar (alt sayfa başlıkları): aynı giriş, ama JS beklemeden, saf CSS ile.
+   RevealInit ancak ~230 KB script inip çalışınca devreye girer; o ana dek başlık ve açılış
+   fotoğrafı görünmez kalırdı (yavaş 4G'de LCP 4 sn, fotoğraf 1,7. saniyede inmiş olduğu halde). */
+[data-reveal='load'] {
+  opacity: 1;
+  transform: none;
+  transition: none;
+  animation: reveal-load 0.7s ease-out both;
+  animation-delay: var(--reveal-delay, 0ms);
+}
+@keyframes reveal-load {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   [data-reveal] {
     opacity: 1;
     transform: none;
     transition: none;
+    animation: none;
   }
+}
+
+/* Yavaş bağlantı / veri tasarrufu (layout.tsx'teki satır içi script işaretler): hero videosu
+   istenmez, kaydırma payı da ilk boyamadan önce kalkar; hydration'ı beklerse alttaki bölüm
+   sonradan yukarı sıçrar. */
+html[data-lite] #hero {
+  height: auto;
 }
 
 /* Gallery view controls (Journey PhotoSet): the VerbMark pill as a button, in the step's colour. */

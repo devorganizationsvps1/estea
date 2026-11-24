@@ -1,12 +1,14 @@
 /*
  * Esçay design tokens shared by every app.
  * Usage (after `@import "tailwindcss";`): @import "@estea/ui/theme.css";
- * Font dosyaları `@estea/ui/fonts` (Fontsource) ile yüklenir; aile adları aşağıda.
+ * Font dosyaları `@estea/ui/fonts` (next/font, yerel) ile yüklenir; aile adları aşağıda.
+ * "... Fallback": next/font'un ölçüleri eşlenmiş Arial'i; font inene dek o görünür,
+ * indiğinde satırlar yer değiştirmez. Adı fonts.ts'teki sabit adından gelir.
  */
 
 :root {
-  --font-archivo: 'Archivo Variable';
-  --font-bricolage: 'Bricolage Grotesque Variable';
+  --font-archivo: 'Archivo Variable', 'archivo Fallback';
+  --font-bricolage: 'Bricolage Grotesque Variable', 'bricolage Fallback';
 }
 
 @theme {

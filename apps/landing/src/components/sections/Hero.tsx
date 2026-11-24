@@ -248,7 +248,10 @@ export default function Hero() {
         aria-hidden="true"
         fill
         preload
-        sizes="100vw"
+        // Dikey telefonda kare yüksekliğe göre kırpılır: 390 px'lik ekranda fotoğraf ~1500 px
+        // genişliğinde çizilir. 100vw denirse 960 px'lik dosya seçilir ve paketler bulanır;
+        // 160vw ile 1280-1600 px'lik basamak gelir (67-90 KB).
+        sizes="(max-aspect-ratio: 3/4) 160vw, 100vw"
         // 2,1 MB PNG yerine ekran genişliğinde AVIF/WebP; videonun ilk karesiyle
         // devir yine görünmez (fotoğraf kaydırırken saydamlaşıyor).
         quality={85}
@@ -257,24 +260,14 @@ export default function Hero() {
     </>
   )
 
-  if (reducedMotion) {
-    return (
-      <section id="hero" className="relative bg-ink">
-        <div className="relative min-h-svh overflow-hidden">
-          {media}
-          <div className="relative z-10 flex min-h-svh items-center py-28">
-            {curtain}
-            <div className="relative w-full">{copy}</div>
-          </div>
-        </div>
-      </section>
-    )
-  }
-
+  // Tek iskelet: `reducedMotion` ancak tarayıcıda (hydration'dan sonra) belli olur.
+  // Sabit düzen ayrı bir iskelet olsaydı yavaş bağlantıda ya da "hareketi azalt"
+  // açıkken ilk ekrandaki yazı açılıştan sonra yer değiştirirdi (CLS 0,66 ölçüldü).
+  // Şimdi yalnız kaydırma payı (240vh) kalkar; ilk ekran piksel piksel aynı kalır.
   // Scroll length sets the scrub speed: the 10 s video is spread over 2.4 screens.
   // The next section starts sliding over the video for the last screen of that.
   return (
-    <section ref={wrapperRef} id="hero" className="relative h-[240vh] bg-ink">
+    <section ref={wrapperRef} id="hero" className={`relative bg-ink ${reducedMotion ? '' : 'h-[240vh] motion-reduce:h-auto'}`}>
       <div ref={pinRef} className="relative h-lvh min-h-[640px] overflow-hidden">
         {media}
         <div ref={textRef} className="absolute inset-x-0 top-0 z-10 flex h-svh min-h-[640px] items-center pt-20 sm:pt-[5.5rem]">

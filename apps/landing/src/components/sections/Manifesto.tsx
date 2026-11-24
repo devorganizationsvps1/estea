@@ -194,6 +194,7 @@ export default function Manifesto() {
               alt=""
               width={341}
               height={182}
+              sizes="224px"
               className="absolute top-[16%] left-0 hidden w-56 -rotate-[8deg] drop-shadow-[0_14px_18px_rgba(0,0,0,0.35)] lg:block"
             />
           </div>

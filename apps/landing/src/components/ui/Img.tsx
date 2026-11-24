@@ -1,6 +1,6 @@
 import type { CSSProperties, Ref } from 'react'
 import NextImage, { type ImageProps } from 'next/image'
-import { mediaImage, pictureSources, preloadSources } from '@/lib/media'
+import { mediaImage, photoSizes, pictureSources, preloadSources } from '@/lib/media'
 
 type Props = Omit<ImageProps, 'src' | 'loader' | 'placeholder' | 'blurDataURL' | 'unoptimized'> & { src: string; ref?: Ref<HTMLImageElement> }
 
@@ -21,9 +21,12 @@ export default function Img(props: Props) {
   if (!image) return <NextImage {...props} />
 
   const eager = Boolean(priority || preload)
-  const sources = pictureSources(image, sizes ?? (fill ? '100vw' : `${width ?? image.width}px`))
+  // Fotoğraf: saydam değil ve kutuyu dolduruyor (logo ve paket kesimleri değil).
+  const photo = Boolean(image.color) && !className?.includes('object-contain')
+  const base = sizes ?? (fill ? '100vw' : `${width ?? image.width}px`)
+  const sources = pictureSources(image, photo ? photoSizes(base) : base)
   if (eager) preloadSources(sources)
-  const tint = image.color && !className?.includes('object-contain') ? image.color : undefined
+  const tint = photo ? (image.color ?? undefined) : undefined
   const w = fill ? undefined : (width ?? image.width)
   const h = fill ? undefined : (height ?? (w ? Math.round((Number(w) * image.height) / image.width) : image.height))
 

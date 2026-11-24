@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
 import Image from '@/components/ui/Img'
+import { defaultSize, scaleSizes } from '@/lib/media'
 
 const SWIPE_PX = 40
 
@@ -36,6 +37,8 @@ export default function PhotoSet({
   /* On phones an empty third reads as a missing photo, so the row is as wide as the set. */
   const colsNarrow = Math.max(rest.length, 2)
   const n = images.length
+  /* Küçük kareler satırı böler: telefonda `colsNarrow`, sm'den itibaren `cols` parçaya. */
+  const thumbSizes = `(max-width: 639px) calc(${defaultSize(sizes)} / ${colsNarrow}), ${scaleSizes(sizes, 1 / cols)}`
 
   const dialogRef = useRef<HTMLDialogElement>(null)
   const [open, setOpen] = useState<number | null>(null)
@@ -93,7 +96,7 @@ export default function PhotoSet({
               aria-label={`${label} fotoğrafı ${i + 2}, büyüt`}
               className={`${tile} aspect-[4/5] cursor-zoom-in`}
             >
-              <Image src={photo.thumb ?? photo.src} alt="" fill sizes={`calc(${sizes} / ${cols})`} className={pic} />
+              <Image src={photo.thumb ?? photo.src} alt="" fill sizes={thumbSizes} className={pic} />
             </button>
           ))}
         </div>

@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react'
 import { getImageProps } from 'next/image'
-import { mediaImage, pictureSources, preloadSources } from '@/lib/media'
+import { mediaImage, photoSizes, pictureSources, preloadSources } from '@/lib/media'
 
 export type ArtSource = { src: string; alt?: string; /** Telefon kırpımı (fotoğraf brief'i mobil kareleri, 400×390). */ mobile?: string; focus?: string }
 
@@ -39,8 +39,8 @@ export default function ArtPhoto({
 
   if (desktop && (mobile || !photo.mobile)) {
     const sources = [
-      ...(mobile ? pictureSources(mobile, mobileSizes, MOBILE_MQ) : []),
-      ...pictureSources(desktop, sizes),
+      ...(mobile ? pictureSources(mobile, photoSizes(mobileSizes), MOBILE_MQ) : []),
+      ...pictureSources(desktop, photoSizes(sizes)),
     ]
     if (priority) preloadSources(mobile ? [...sources.slice(0, 2), ...sources.slice(2).map((s) => ({ ...s, media: '(min-width: 640px)' }))] : sources)
     return (

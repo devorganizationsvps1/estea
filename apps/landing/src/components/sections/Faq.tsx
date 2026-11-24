@@ -19,7 +19,7 @@ export default function Faq() {
             alt=""
             width={341}
             height={182}
-            className="mx-auto mb-5 h-16 w-auto -rotate-[5deg] drop-shadow-[0_8px_14px_rgba(0,0,0,0.22)] sm:h-20"
+            sizes="150px" className="mx-auto mb-5 h-16 w-auto -rotate-[5deg] drop-shadow-[0_8px_14px_rgba(0,0,0,0.22)] sm:h-20"
           />
           <h2 id="sss-baslik" className="headline text-[clamp(2.4rem,5vw,4rem)] leading-[0.95] tracking-[-0.025em] text-ink">
             {faq.title}

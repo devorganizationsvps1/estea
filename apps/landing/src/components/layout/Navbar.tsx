@@ -90,6 +90,8 @@ export default function Navbar({ tone = 'cream' }: { tone?: Tone }) {
             width={180}
             height={96}
             priority
+            // h-12 / h-14: 90-105 px genişlik.
+            sizes="105px"
             className="h-12 w-auto sm:h-14"
           />
         </Link>
@@ -142,7 +144,7 @@ export default function Navbar({ tone = 'cream' }: { tone?: Tone }) {
         {/* The menu can open anywhere on the page, so it carries the logo itself. */}
         <div className="flex h-20 items-center px-5">
           <Link href="/" aria-label="Esçay ana sayfa" tabIndex={open ? 0 : -1} onClick={() => setOpen(false)} className="rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-gold">
-            <Image src="/logo.png" alt="Esçay" width={180} height={96} className="h-12 w-auto" />
+            <Image src="/logo.png" alt="Esçay" width={180} height={96} sizes="105px" className="h-12 w-auto" />
           </Link>
         </div>
         <ul className="flex min-h-[calc(100%-5rem)] flex-col px-6 pt-4 pb-10">

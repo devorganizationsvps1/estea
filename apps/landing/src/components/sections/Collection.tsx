@@ -172,7 +172,8 @@ export default function Collection() {
                   src={p.image}
                   alt={isActive ? '' : `${p.name} seç`}
                   fill
-                  sizes="(min-width: 1024px) 420px, 70vw"
+                  // Kare kutu 210 / 290 px / 20vw yüksekliğinde, etkin paket 1,15 kat büyür.
+                  sizes="(min-width: 1024px) 23vw, (min-width: 640px) 334px, 242px"
                   draggable={false}
                   className="object-contain"
                 />

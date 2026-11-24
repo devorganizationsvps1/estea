@@ -35,11 +35,19 @@ export default function LeafCursor() {
     let shown = false
     let raf = 0
 
+    // Yaprak hedefe varınca döngü durur, fare kıpırdayınca yeniden başlar; yoksa
+    // sayfa açık kaldığı sürece saniyede 60 kez boşuna stil yazılırdı (pil, işlemci).
     const tick = () => {
       x += (tx - x) * EASE
       y += (ty - y) * EASE
+      if (Math.abs(tx - x) < 0.1 && Math.abs(ty - y) < 0.1) {
+        x = tx
+        y = ty
+        raf = 0
+      } else {
+        raf = requestAnimationFrame(tick)
+      }
       el.style.transform = `translate3d(${x}px, ${y}px, 0)`
-      raf = requestAnimationFrame(tick)
     }
 
     const onMove = (e: PointerEvent) => {
@@ -57,6 +65,7 @@ export default function LeafCursor() {
         leaf.dataset.on = String(!over)
         glass.dataset.on = String(over)
       }
+      if (!raf) raf = requestAnimationFrame(tick)
     }
     const hide = () => {
       shown = false
@@ -65,7 +74,6 @@ export default function LeafCursor() {
 
     window.addEventListener('pointermove', onMove, { passive: true })
     document.documentElement.addEventListener('pointerleave', hide)
-    raf = requestAnimationFrame(tick)
 
     return () => {
       cancelAnimationFrame(raf)

@@ -45,16 +45,16 @@ export default async function PostPage({ params }: Params) {
         <article className="relative z-10 bg-linen pt-32 pb-24 text-ink sm:pt-40 sm:pb-32">
           <div className="mx-auto max-w-7xl px-5 sm:px-8">
             <header className="grid gap-x-8 gap-y-8 lg:grid-cols-12">
-              <h1 data-reveal className="headline text-[clamp(2.1rem,5.2vw,4.6rem)] leading-[0.95] tracking-[-0.03em] lg:col-span-12">
+              <h1 data-reveal="load" className="headline text-[clamp(2.1rem,5.2vw,4.6rem)] leading-[0.95] tracking-[-0.03em] lg:col-span-12">
                 {post.title}
               </h1>
-              <div data-reveal style={{ '--reveal-delay': '80ms' } as React.CSSProperties} className="lg:col-span-4 lg:self-start lg:pt-2">
+              <div data-reveal="load" style={{ '--reveal-delay': '80ms' } as React.CSSProperties} className="lg:col-span-4 lg:self-start lg:pt-2">
                 <p className="text-[clamp(1.2rem,1.6vw,1.45rem)] leading-[1.45] font-medium">{post.excerpt}</p>
                 <p className="mt-5 text-[1rem] text-ink/60">
                   <time dateTime={post.date}>{post.dateLabel}</time>
                 </p>
               </div>
-              <div data-reveal style={{ '--reveal-delay': '160ms' } as React.CSSProperties} className={`relative overflow-hidden rounded-2xl bg-paper sm:aspect-[16/10] lg:col-span-8 lg:col-start-5 ${post.imageMobile ? 'aspect-[40/39]' : 'aspect-[16/10]'}`}>
+              <div data-reveal="load" style={{ '--reveal-delay': '160ms' } as React.CSSProperties} className={`relative overflow-hidden rounded-2xl bg-paper sm:aspect-[16/10] lg:col-span-8 lg:col-start-5 ${post.imageMobile ? 'aspect-[40/39]' : 'aspect-[16/10]'}`}>
                 <ArtPhoto photo={{ src: post.image, mobile: post.imageMobile, alt: post.alt }} sizes="(max-width: 1023px) 100vw, 66vw" priority />
               </div>
             </header>

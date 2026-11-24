@@ -71,7 +71,8 @@ export default function BlogIndex() {
           <p className="mt-8 max-w-[38ch] text-[1.2rem] leading-[1.45] sm:mt-14 sm:text-[1.6rem]">{blogPage.lead}</p>
 
           {/* En yeni yazı: başlıktaki şeridin açılmış hâli. */}
-          <article className="mt-16 sm:mt-24" data-reveal>
+          {/* İlk ekranda: giriş CSS ile (JS beklemez), fotoğraf öncelikli iner. */}
+          <article className="mt-16 sm:mt-24" data-reveal="load" style={{ '--reveal-delay': '200ms' } as React.CSSProperties}>
             <a
               href={`/blog/${lead.slug}`}
               className="group block rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-4 focus-visible:ring-offset-linen"
@@ -80,6 +81,7 @@ export default function BlogIndex() {
                 <ArtPhoto
                   photo={{ src: lead.image, mobile: lead.imageMobile }}
                   alt={lead.alt}
+                  priority
                   // Tam genişlik 21:9 kare; varsayılan 50vw masaüstünde yarım çözünürlük seçtirir.
                   sizes="(max-width: 1440px) 100vw, 1440px"
                   className="transition-transform duration-700 group-hover:scale-[1.03] motion-reduce:transition-none"

@@ -21,12 +21,12 @@ export default function Journey() {
       {/* Esçay line pattern (teapots, glasses, sprigs) tiled faintly across the section, fading in at the top and out toward the seal at the bottom. */}
       <div
         aria-hidden="true"
-        className="absolute inset-0 bg-[url(/pattern/escay-vector.webp)] bg-[length:520px_auto] opacity-[0.12] [mask-image:linear-gradient(to_bottom,transparent,#000_160px,#000_calc(100%-260px),transparent)]"
+        className="absolute inset-0 escay-pattern bg-[length:520px_auto] opacity-[0.12] [mask-image:linear-gradient(to_bottom,transparent,#000_160px,#000_calc(100%-260px),transparent)]"
       />
       <div className="relative mx-auto max-w-7xl px-5 sm:px-8">
         <header className="text-center">
           {/* The seal above the title, as on the pack. */}
-          <Image src="/logo.png" alt="" width={341} height={182} className="mx-auto mb-6 h-16 w-auto drop-shadow-[0_8px_12px_rgba(0,0,0,0.2)] sm:h-20" />
+          <Image src="/logo.png" alt="" width={341} height={182} sizes="150px" className="mx-auto mb-6 h-16 w-auto drop-shadow-[0_8px_12px_rgba(0,0,0,0.2)] sm:h-20" />
           <h2
             id="yolculuk-baslik"
             className="headline text-amber text-[clamp(2.6rem,6.4vw,5.4rem)] leading-[0.95] tracking-[-0.03em] lg:whitespace-nowrap"

@@ -115,7 +115,7 @@ export default function Footer() {
       <div className="border-t border-cream/15">
         <div className="mx-auto grid max-w-7xl gap-12 px-5 py-14 sm:px-8 lg:grid-cols-12 lg:gap-8">
           <div className="lg:col-span-4">
-            <Image src="/logo.png" alt="Esçay" width={180} height={96} className="h-14 w-auto" />
+            <Image src="/logo.png" alt="Esçay" width={180} height={96} sizes="105px" className="h-14 w-auto" />
             <p className="mt-6 max-w-[32ch] text-[1rem] leading-[1.55] text-cream/80">
               Karadeniz’in yüksek rakımlı bahçelerinden, katkısız harmanlanan çay.
             </p>
