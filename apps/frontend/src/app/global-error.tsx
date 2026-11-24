@@ -3,7 +3,7 @@
 // Kök layout'un kendisi hata verdiğinde çalışır: layout (header, footer, fontlar)
 // yoktur, <html> ve <body> burada kurulur. Bağlantılar düz <a>: istemci yönlendirmesi
 // bozuk layout'a geri dönebilir, tam sayfa yüklemesi temiz başlar.
-import "@fontsource-variable/figtree/wght.css"
+import "@/lib/fonts"
 import "./globals.css"
 import { useEffect } from "react"
 import { COMPANY } from "@/lib/company"
