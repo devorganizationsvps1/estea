@@ -29,7 +29,7 @@ Varsayılan bağlantı `localhost:5433`, kullanıcı ve parola `medusa/medusa` (
 Dış servislerin hiçbiri çağrılmaz:
 
 - PayTR: `PAYTR_MOCK=1`. Ödeme oturumu taklittir ve `/odeme/iade` isteği `mock-iade` katmanına gider.
-- BizimHesap: `BIZIMHESAP_FIRM_ID` boş, yani mock modda.
+- Paraşüt: `PARASUT_CLIENT_ID` boş, yani mock modda. Shopside: kimlik boş, kapalı.
 - Kargo: `SHIPPING_CARRIER` boş, yani manuel.
 - E-posta: notification modülü kayıt tutar, mail göndermez.
 
@@ -65,7 +65,7 @@ Dış servislerin hiçbiri çağrılmaz:
 - İstek listesi müşteriler arasında ayrık tutulur.
 - İletişim formunda doğrulama, bal tuzağı alanı ve hız sınırı çalışır.
 
-**Diğerleri:** `auth`, `guest-customer` (misafir siparişinin hesaba bağlanması), `order-lookup`, `returns` (misafir iadesi güvenliği), `bizimhesap-invoice`, `catalog`, `errors`.
+**Diğerleri:** `auth`, `guest-customer` (misafir siparişinin hesaba bağlanması), `order-lookup`, `returns` (misafir iadesi güvenliği), `parasut-invoice`, `stock-sync` (Paraşüt → Medusa → Shopside, sahte API), `catalog`, `errors`.
 
 ## Yardımcılar (`integration-tests/http/helpers`)
 

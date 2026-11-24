@@ -19,10 +19,10 @@ Es Çay doğrudan DHL (K1), Geliver maddeleri DHL karşılığıyla değerlendir
 | Canlıda test kartı (L3) / `payment_method` (L1) | bkz. `docs/guvenlik/DIFF-REVIEW-2026-11-17.md` | |
 | Desi adetle şişiyordu (2 adet 6, 3+ adet 9 desi) | Koli profili adetle büyümez; istifleme yalnız kalemde paket başı ölçü varsa ya da profilde `"stack": true` ise. Mevcut env değeri değişmeden düzelir | `modules/carrier/package-profile.ts` |
 | Gönderi açma yarışı (admin "yeniden dene" + iş) | Sipariş başına kilit | `lib/auto-fulfill-order.ts` |
-| Mock / dry-run fatura kalıcı "kesildi" sayılıyordu | Gerçek bağlantı açılınca bu siparişlere gerçek fatura gider | `lib/bizimhesap-invoice.ts` |
+| Mock / dry-run fatura kalıcı "kesildi" sayılıyordu | Gerçek bağlantı açılınca bu siparişlere gerçek fatura gider | `lib/parasut-invoice.ts` |
 | Parası tamamen iade edilmiş (iptalsiz) sipariş faturalanıyordu | Faturalanmaz (`skipped`, `refunded`) | aynı |
 | Fatura notundaki "ödeme tarihi" kesim günüydü | İlk tahsilatın günü (İstanbul) | `firstCaptureDate` |
-| Hasarlı iade BizimHesap'tan satışa geri dönebilir | İade faturası mailinde hasarlı kalemler "stoğa sokmayın" diye yazılır | `bizimhesap-invoice-admin-notify.ts` |
+| Hasarlı iade Paraşüt'ten satışa geri dönebilir | İade faturası mailinde hasarlı kalemler "stoğa sokmayın" diye yazılır | `parasut-invoice-admin-notify.ts` |
 | Kargo / teslim / iade kodu mailleri yeniden denenmiyordu | Sipariş onayı gibi kayıttan yeniden üretilip denenir | `lib/failed-emails.ts`, `failed-emails.spec.ts` |
 | `gmial.com` gibi gerçek ama yanlış alan adları | Checkout'ta "bunu mu demek istediniz" | storefront `lib/email-domain.ts` |
 | `STOREFRONT_URL` boşken mail linkleri localhost'a gidiyordu | Canlıda boş / yerel adresle backend açılmaz | `medusa-config.ts` |
@@ -35,7 +35,7 @@ Es Çay doğrudan DHL (K1), Geliver maddeleri DHL karşılığıyla değerlendir
 | Eski WordPress yazı adresleri | 7 yazı için `/<slug>` → `/blog/<slug>` 301; `elementor-3218` linki düzeltildi | `apps/landing/next.config.ts` |
 | Medusa 2.18 açıkları (21 yüksek) | Medusa 2.22.4 (6 Kasım, 2.23.0 çok yeni), zod 4.6.6, backend imajı Node 22; audit: 0 kritik, 0 yüksek, 11 orta. Bağlantı tablosu değişikliği için tek seferlik `MEDUSA_LINKS=all` (DOKPLOY-ENV.md) | `apps/backend/package.json`, `Dockerfile.backend`, `docker/entrypoint.sh` |
 | Kargo KDV oranı env'den | Siparişin kargo vergi satırından; yoksa env | `shippingVatRateOf` |
-| Şahıs şirketi kurumsal fatura seçemiyordu | Kurumsal faturada 11 haneli TCKN de kabul (kontrol basamaklı), BizimHesap'a vergi no olarak gider | `shared/checkout-address.ts`, `bizimhesap/customer.ts` |
+| Şahıs şirketi kurumsal fatura seçemiyordu | Kurumsal faturada 11 haneli TCKN de kabul (kontrol basamaklı), Paraşüt'e vergi no olarak gider | `shared/checkout-address.ts`, `lib/invoice-customer.ts` |
 | İade kodu yenilenemiyordu; talepte firma hatası olursa kod hiç alınamıyordu | Admin "Kodu yenile" / "Kargo firmasından kod al": firmadaki iade kaydı iptal edilip aynı referansla yeniden açılır, kod müşteriye yeniden gider. DHL sandbox'ta doğrulandı (2026-11-20) | `lib/return-code-renew.ts`, `POST /admin/returns/:id/return-code/renew`, DHL `cancelReturn` |
 | Storefront / landing HEALTHCHECK, landing revision ucu | Dockerfile HEALTHCHECK; landing `/api/build-info` | `Dockerfile.storefront`, `Dockerfile.landing` |
 
@@ -46,8 +46,8 @@ Es Çay doğrudan DHL (K1), Geliver maddeleri DHL karşılığıyla değerlendir
 | PayTR ile günlük tam karşılaştırma | ⏳ | Uzlaştırma yalnız `paytr_checkout` kaydı olan ödemeleri görür. PayTR'nin işlem dökümü ucu canlıda denenmeli |
 | İade kuruş yuvarlaması | ✅ (kabul) | 3 ayrı kısmi iadede en çok 0,01 TL eksik iade; fazla iade yok |
 | Taksitte vade farkı | 🔧 | Vade farkı iade edilmez (karar); PayTR'nin iadeyi hangi tutar üzerinden kabul ettiği canlıda görülmeli |
-| Sipariş numarasında boşluk / fatura numarası | 🔧 | BizimHesap teyidi (K14) |
-| E-fatura mükellefi tespiti, faturada gönderim tarihi, boş TCKN | 🔧 | BizimHesap teyidi (K14): e-fatura / e-arşiv ayrımını BizimHesap mı yapıyor, gönderim tarihi alanı var mı |
+| Sipariş numarasında boşluk / fatura numarası | 🔧 | Fatura numarasını Paraşüt verir (e-belge serisi); sipariş no `order_no` alanında (K14) |
+| E-fatura mükellefi tespiti, faturada gönderim tarihi, boş TCKN | 🔧 | Paraşüt (K14): e-fatura mükellefi VKN ile sorgulanır (`e_invoice_inboxes`); gönderim tarihi (`send_date`) gönderilmiyor, mali müşavir teyidi |
 | Gmail SMTP limiti, SPF/DKIM/DMARC | 🔧 | İşlemsel mail servisi + alan adı kayıtları (K12) |
 | CookieYes ID boş | 🔧 | Banner çıkmadan hiçbir takip çalışmaz (K7) |
 | S3 boş (yüklemeler container diskinde) | 🔧 | Bucket + `S3_*`; yedekler için ayrı kapalı bucket |

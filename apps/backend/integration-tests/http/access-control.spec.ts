@@ -30,7 +30,7 @@ const ADMIN_ROUTES: [method: "get" | "post", path: string][] = [
   ["get", "/admin/tr-geo"],
   ["get", "/admin/orders/order_x/bank-transfer"],
   ["post", "/admin/orders/order_x/bank-transfer/confirm"],
-  ["post", "/admin/orders/order_x/bizimhesap-invoice/retry"],
+  ["post", "/admin/orders/order_x/parasut-invoice/retry"],
   ["post", "/admin/orders/order_x/contracts"],
   ["get", "/admin/orders/order_x/contracts/distance-sales"],
   ["post", "/admin/orders/order_x/escay-cancel"],

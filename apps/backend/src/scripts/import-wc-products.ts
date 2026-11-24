@@ -278,5 +278,5 @@ export default async function importWcProducts({ container }: ExecArgs) {
     `=== Import bitti: ${created} yeni ürün, ${updated} güncellenen ürün, ${variantsCreated} yeni varyant, ${levelsCreated} stok seviyesi ===`
   )
   logger.info(`Görseller ${imageBase}/… adresinden servis edilir (apps/frontend/public/urunler).`)
-  logger.info("Admin → Products altında fiyat/stok/metinleri kontrol edin; SKU'lar BizimHesap'a ürün kimliği olarak gider.")
+  logger.info("Admin → Products altında fiyat/stok/metinleri kontrol edin; SKU'lar Paraşüt ürün kodu ve Shopside stok kodu olarak kullanılır.")
 }

@@ -56,7 +56,7 @@ export const OPS_KIND_ACTION: Record<string, string> = {
   "return.refund_failed": "İadeyi açıp Para iadesini tekrar dene düğmesine basın. Yine olmazsa teknik sorumluya haber verin.",
   "exchange.failed": "Değişimi açın; hata orada yazar. İade teslim alınmadıysa önce teslim alın, sonra Yeni ürünü gönder düğmesine basın.",
   "invoice.failed": "Siparişin Fatura kartından yeniden gönderin.",
-  "invoice.refund_manual": "İade faturasını BizimHesap'tan elle kesin.",
+  "invoice.refund_manual": "İade faturasını Paraşüt'ten elle kesin.",
 }
 
 /** Kargo denetimi bulguları ayrı işler ister: başlıktaki bulgu türüne göre. */

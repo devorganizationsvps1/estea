@@ -180,7 +180,7 @@ function assertSafe(logger: Logger) {
     problems.push("canlı dışı ortam işareti yok (PAYTR_OID_PREFIX boş). Bu veritabanı canlı değilse DHL_SIM_FORCE=1 ile çalıştırın")
   }
   if (problems.length) throw new Error(`Simülasyon çalıştırılamaz:\n - ${problems.join("\n - ")}`)
-  if (!nonProd) logger.warn("[sim] DHL_SIM_FORCE=1 — PAYTR_OID_PREFIX boş; fatura (BizimHesap) ve pazarlama entegrasyonlarının kapalı/mock olduğundan emin olun.")
+  if (!nonProd) logger.warn("[sim] DHL_SIM_FORCE=1 — PAYTR_OID_PREFIX boş; fatura (Paraşüt) ve pazarlama entegrasyonlarının kapalı/mock olduğundan emin olun.")
 }
 
 async function setup(container: MedusaContainer, query: Query) {

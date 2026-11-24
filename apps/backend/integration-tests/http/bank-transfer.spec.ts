@@ -31,7 +31,7 @@ medusaIntegrationTestRunner({
     BANK_TRANSFER_BANK_NAME: "Test Bankası",
     BANK_TRANSFER_ACCOUNT_NAME: "Es Çay Test Ltd.",
     BANK_TRANSFER_IBAN: "tr330006100519786457841326",
-    BIZIMHESAP_FIRM_ID: "",
+    PARASUT_CLIENT_ID: "",
   },
   testSuite: ({ api, getContainer }) => {
     // Havale kapalı (2026-11-07, K3): sağlayıcı medusa-config.ts'de yorumda. Açılınca skip'i kaldır.

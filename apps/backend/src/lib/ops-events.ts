@@ -114,7 +114,7 @@ const KIND_LABEL: Record<OpsEventKind, string> = {
   "contract.failed": "Sözleşme PDF'i oluşturulamadı",
   "invoice.failed": "Fatura oluşturulamadı",
   "invoice.refund_manual": "İade faturası elle kesilecek",
-  "stock.sync": "BizimHesap stok eşitlemesi",
+  "stock.sync": "Stok eşitlemesi (Paraşüt / Shopside)",
   "mail.failed": "Mail gönderilemedi",
 }
 

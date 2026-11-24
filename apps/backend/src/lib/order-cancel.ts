@@ -191,13 +191,16 @@ async function cancelUnshippedOrderUnlocked(
     data: { refund_amount: refundAmount, manual_refund: manualRefund, by: input.actorId || null },
   })
 
-  const invoice = order.metadata?.bizimhesap_invoice as { status?: string } | undefined
-  if (invoice?.status === "created") {
+  // Satış faturası açıldıysa (resmileşmese de) Paraşüt'te kayıt ve stok hareketi vardır.
+  const invoice = order.metadata?.parasut_invoice as
+    | { status?: string; mode?: string; invoice_id?: string }
+    | undefined
+  if (invoice?.mode === "live" && invoice.invoice_id && invoice.status !== "draft_dryrun") {
     await recordOpsEvent(scope, {
       kind: "invoice.refund_manual",
       level: "warning",
       title: "İptal edilen siparişin faturası kesilmiş",
-      detail: "BizimHesap'ta iade faturasını elle kesin.",
+      detail: "Paraşüt'te iade faturasını elle kesin (resmileşmemiş satış faturasıysa silin).",
       orderId: order.id,
     })
   }

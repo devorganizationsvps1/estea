@@ -3,7 +3,7 @@
  *
  * Storefront form/aksiyonları ve backend completeCart hook'u aynı kuralları çalıştırır;
  * Store API'yi doğrudan çağıran istek de aynı süzgeçten geçer. Fatura metadata
- * anahtarları backend BizimHesap müşteri çözümü ile birebir hizalı:
+ * anahtarları backend fatura müşteri çözümü (invoice-customer) ile birebir hizalı:
  *   invoice_type | vkn | tckn | tax_office | company_name | district | neighbourhood | city_code
  */
 
@@ -16,7 +16,7 @@ import {
 } from "./tr-address"
 import { isTrDistrictOf } from "./tr-districts"
 
-/** Backend BizimHesap faturası: corporate → VKN + vergi dairesi müşteri kartına gider. */
+/** Backend Paraşüt faturası: corporate → VKN + vergi dairesi müşteri kartına gider. */
 export type CheckoutInvoiceType = "individual" | "corporate"
 
 export type CheckoutAddressInput = {
@@ -375,7 +375,7 @@ export function validateCheckoutAddress(
 }
 
 /**
- * Backend BizimHesap müşteri çözümü + kargo alanları ile birebir metadata.
+ * Backend fatura müşteri çözümü (invoice-customer) + kargo alanları ile birebir metadata.
  * Yazılan anahtarlar: invoice_type, vkn?, tckn?, tax_office?, company_name?,
  * district, neighbourhood, city_code, email?
  */

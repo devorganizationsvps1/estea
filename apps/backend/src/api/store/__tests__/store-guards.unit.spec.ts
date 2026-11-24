@@ -57,7 +57,7 @@ describe("stripReservedCartMetadata", () => {
         legal_accepted_at: "2026-11-17T10:00:00Z",
         order_note: "zil çalmayın",
         source: "import",
-        bizimhesap_invoice: { status: "created" },
+        parasut_invoice: { status: "issued" },
         contracts: { source: "medusa" },
         label_printed_at: "x",
         escay_cancel: {},

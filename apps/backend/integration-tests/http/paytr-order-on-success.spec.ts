@@ -23,7 +23,7 @@ medusaIntegrationTestRunner({
     PAYTR_MERCHANT_SALT: "",
     SHIPPING_CARRIER: "",
     COOKIE_SECURE: "false",
-    BIZIMHESAP_FIRM_ID: "",
+    PARASUT_CLIENT_ID: "",
   },
   testSuite: ({ api, getContainer }) => {
     describe("PayTR: sipariş ödeme başarılı olunca oluşur", () => {

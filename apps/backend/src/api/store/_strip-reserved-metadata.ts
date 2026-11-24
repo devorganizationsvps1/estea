@@ -13,7 +13,7 @@ import { BANK_TRANSFER_METHOD, bankTransferInfo } from "../../lib/bank-transfer"
  * Bu anahtarlar yalnızca sunucu (import, admin) tarafından yazılır; istekten silinir.
  *
  * Sepet için izinli liste: siparişe kopyalanan metadata'da sunucunun karar verdiği
- * anahtarlar (bizimhesap_invoice, contracts, label_printed_at, escay_*, paytr_refund …)
+ * anahtarlar (parasut_invoice, contracts, label_printed_at, escay_*, paytr_refund …)
  * istemciden gelirse fatura/sözleşme atlanır, sipariş kargo sayacından düşer. Bu yüzden
  * yalnız mağazanın yazdığı anahtarlar geçer; yenisi eklenirse buraya da eklenmeli.
  */

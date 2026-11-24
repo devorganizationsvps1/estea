@@ -1,8 +1,8 @@
 /**
- * Uçtan uca smoke: sipariş → PayTR mock ödeme → BizimHesap fatura → kargo skip →
+ * Uçtan uca smoke: sipariş → PayTR mock ödeme → Paraşüt fatura → kargo skip →
  * iade + elle iade faturası işareti → iade reddi guard. Tüm kimlikler mock.
  *
- * Önkoşul: backend ayakta (PAYTR_MOCK=1, SHIPPING_CARRIER boş, BIZIMHESAP_FIRM_ID boş).
+ * Önkoşul: backend ayakta (PAYTR_MOCK=1, SHIPPING_CARRIER boş, PARASUT_CLIENT_ID boş).
  *
  *   PAYTR_MOCK=1 npx medusa exec ./src/scripts/smoke-full-flow.ts
  *
@@ -29,16 +29,16 @@ import {
 import crypto from "crypto"
 import { createStoreReturnRequest } from "../api/store/returns/_create-return"
 import { resolveDefaultStockLocationId } from "../lib/default-stock-location"
-import { issueSalesInvoiceForOrder } from "../lib/bizimhesap-invoice"
-import { flagRefundInvoiceForReturn } from "../lib/bizimhesap-refund-invoice"
+import { issueSalesInvoiceForOrder } from "../lib/parasut-invoice"
+import { issueRefundInvoiceForReturn } from "../lib/parasut-refund-invoice"
 import { isReturnRejected } from "../lib/return-rejection"
 import { processReturnRefund } from "../lib/return-refund"
 import {
-  BIZIMHESAP_MODULE,
-  type BizimhesapOrderInvoiceMeta,
-  type BizimhesapRefundInvoiceMeta,
-} from "../modules/bizimhesap"
-import BizimhesapModuleService from "../modules/bizimhesap/service"
+  PARASUT_MODULE,
+  type ParasutOrderInvoiceMeta,
+  type ParasutRefundInvoiceMeta,
+} from "../modules/parasut"
+import ParasutModuleService from "../modules/parasut/service"
 
 const BACKEND = process.env.MEDUSA_BACKEND_URL || "http://localhost:9000"
 const MAILPIT = process.env.MAILPIT_URL || "http://localhost:8025"
@@ -331,7 +331,7 @@ async function createPaidOrder(
   if (!oid) throw new Error("No merchant_oid on payment session")
 
   await postCallback({ oid, amt: kurus, status: "success" })
-  // Subscribers (email + kargo + bizimhesap) async
+  // Subscribers (email + kargo + parasut) async
   await sleep(2500)
 
   const { data: orders } = await query.graph({
@@ -457,8 +457,8 @@ async function readInvoiceMeta(
   container: MedusaContainer,
   orderId: string
 ): Promise<{
-  invoice: BizimhesapOrderInvoiceMeta | null
-  refunds: Record<string, BizimhesapRefundInvoiceMeta>
+  invoice: ParasutOrderInvoiceMeta | null
+  refunds: Record<string, ParasutRefundInvoiceMeta>
   metadata: Record<string, unknown> | null
 }> {
   const query = container.resolve(ContainerRegistrationKeys.QUERY)
@@ -469,12 +469,12 @@ async function readInvoiceMeta(
   })
   const meta = ((data?.[0] as { metadata?: Record<string, unknown> } | undefined)
     ?.metadata || null) as Record<string, unknown> | null
-  const invoice = (meta?.bizimhesap_invoice || null) as BizimhesapOrderInvoiceMeta | null
+  const invoice = (meta?.parasut_invoice || null) as ParasutOrderInvoiceMeta | null
   const refunds =
-    meta?.bizimhesap_refund_invoices &&
-    typeof meta.bizimhesap_refund_invoices === "object" &&
-    !Array.isArray(meta.bizimhesap_refund_invoices)
-      ? (meta.bizimhesap_refund_invoices as Record<string, BizimhesapRefundInvoiceMeta>)
+    meta?.parasut_refund_invoices &&
+    typeof meta.parasut_refund_invoices === "object" &&
+    !Array.isArray(meta.parasut_refund_invoices)
+      ? (meta.parasut_refund_invoices as Record<string, ParasutRefundInvoiceMeta>)
       : {}
   return { invoice, refunds, metadata: meta }
 }
@@ -497,7 +497,7 @@ export default async function smokeFullFlow({ container }: ExecArgs) {
   const logger = container.resolve(ContainerRegistrationKeys.LOGGER)
   const checks: Check[] = []
 
-  logger.info("[smoke-full] === START full flow (PayTR + BizimHesap + kargo + RMA) ===")
+  logger.info("[smoke-full] === START full flow (PayTR + Paraşüt + kargo + RMA) ===")
 
   await ensureBackendUp()
   add(checks, "backend_up", true, BACKEND, logger)
@@ -521,17 +521,17 @@ export default async function smokeFullFlow({ container }: ExecArgs) {
     logger
   )
 
-  let bizimhesap: BizimhesapModuleService
+  let parasut: ParasutModuleService
   try {
-    bizimhesap = container.resolve(BIZIMHESAP_MODULE) as BizimhesapModuleService
+    parasut = container.resolve(PARASUT_MODULE) as ParasutModuleService
   } catch (err) {
-    add(checks, "bizimhesap_module", false, String(err), logger)
-    throw new Error("BizimHesap module not registered — check medusa-config")
+    add(checks, "parasut_module", false, String(err), logger)
+    throw new Error("Paraşüt module not registered — check medusa-config")
   }
-  const conn = bizimhesap.getConnectionStatus()
+  const conn = parasut.getConnectionStatus()
   add(
     checks,
-    "bizimhesap_mock_mode",
+    "parasut_mock_mode",
     conn.mode === "mock",
     `mode=${conn.mode} base=${conn.baseUrl}`,
     logger
@@ -564,7 +564,7 @@ export default async function smokeFullFlow({ container }: ExecArgs) {
   const beforeDelivery = await readInvoiceMeta(container, paid.orderId)
   add(
     checks,
-    "bizimhesap_no_invoice_before_delivery",
+    "parasut_no_invoice_before_delivery",
     !beforeDelivery.invoice,
     `status=${beforeDelivery.invoice?.status || "yok"}`,
     logger
@@ -575,31 +575,33 @@ export default async function smokeFullFlow({ container }: ExecArgs) {
 
   // Wait a bit more if invoice not yet written by HTTP-side subscriber
   let { invoice } = await readInvoiceMeta(container, paid.orderId)
-  if (!invoice || invoice.status !== "created") {
+  // Mock modda fatura "issued"; canlı dışı işaretiyle (PAYTR_OID_PREFIX) dry-run zorlanır → "draft_dryrun".
+  const invoiceDone = (s?: string) => s === "issued" || s === "draft_dryrun"
+  if (!invoice || !invoiceDone(invoice.status)) {
     logger.info(
       "[smoke-full] Invoice not yet on order from HTTP subscriber — issuing via lib (exec process) + recheck"
     )
-    // Backend HTTP process may be old without bizimhesap subscriber; still verify lib path.
+    // Backend HTTP process may be old without parasut subscriber; still verify lib path.
     const issued = await issueSalesInvoiceForOrder(container, paid.orderId)
     invoice = issued.meta
   }
 
   add(
     checks,
-    "bizimhesap_invoice_created",
-    invoice?.status === "created" && Boolean(invoice.guid),
+    "parasut_invoice_created",
+    invoiceDone(invoice?.status) && Boolean(invoice?.invoice_id),
     JSON.stringify({
       status: invoice?.status,
       mode: invoice?.mode,
-      no: invoice?.invoice_no,
-      guid: invoice?.guid,
+      no: invoice?.invoice_number,
+      invoice_id: invoice?.invoice_id,
       total: invoice?.total,
     }),
     logger
   )
   add(
     checks,
-    "bizimhesap_invoice_mock_flag",
+    "parasut_invoice_mock_flag",
     invoice?.mode === "mock",
     `mode=${invoice?.mode}`,
     logger
@@ -613,11 +615,11 @@ export default async function smokeFullFlow({ container }: ExecArgs) {
   const afterIdem = await readInvoiceMeta(container, paid.orderId)
   add(
     checks,
-    "bizimhesap_idempotent_skip",
+    "parasut_idempotent_skip",
     again.skipped === true &&
-      again.meta.guid === invoice?.guid &&
-      afterIdem.invoice?.guid === invoice?.guid,
-    `skipped=${again.skipped} same_guid=${again.meta.guid}`,
+      again.meta.invoice_id === invoice?.invoice_id &&
+      afterIdem.invoice?.invoice_id === invoice?.invoice_id,
+    `skipped=${again.skipped} same_invoice=${again.meta.invoice_id}`,
     logger
   )
 
@@ -640,7 +642,7 @@ export default async function smokeFullFlow({ container }: ExecArgs) {
   add(
     checks,
     "carrier_did_not_break_invoice",
-    afterIdem.invoice?.status === "created",
+    invoiceDone(afterIdem.invoice?.status),
     "invoice issued after capture/carrier/delivery chain",
     logger
   )
@@ -662,8 +664,8 @@ export default async function smokeFullFlow({ container }: ExecArgs) {
   add(
     checks,
     "subscriber_isolation_capture",
-    confirmMails >= 1 && afterIdem.invoice?.status === "created",
-    "email after payment.captured + bizimhesap_invoice after delivery.created",
+    confirmMails >= 1 && invoiceDone(afterIdem.invoice?.status),
+    "email after payment.captured + parasut_invoice after delivery.created",
     logger
   )
 
@@ -719,7 +721,7 @@ export default async function smokeFullFlow({ container }: ExecArgs) {
     logger.info(
       "[smoke-full] Refund flag missing from HTTP subscriber — flagging via lib"
     )
-    await flagRefundInvoiceForReturn(container, {
+    await issueRefundInvoiceForReturn(container, {
       return_id: created.id,
       order_id: paid.orderId,
       amount: Number(pr?.amount) || paid.itemTotal,
@@ -730,19 +732,19 @@ export default async function smokeFullFlow({ container }: ExecArgs) {
   const refundMeta = refunds[created.id]
   add(
     checks,
-    "bizimhesap_refund_manual_required",
+    "parasut_refund_manual_required",
     refundMeta?.status === "manual_required",
     JSON.stringify(refundMeta),
     logger
   )
   add(
     checks,
-    "bizimhesap_refund_idempotent",
+    "parasut_refund_idempotent",
     true,
     "re-issue check next",
     logger
   )
-  const refundAgain = await flagRefundInvoiceForReturn(container, {
+  const refundAgain = await issueRefundInvoiceForReturn(container, {
     return_id: created.id,
     order_id: paid.orderId,
     amount: Number(pr?.amount) || paid.itemTotal,
@@ -750,7 +752,7 @@ export default async function smokeFullFlow({ container }: ExecArgs) {
   checks.pop()
   add(
     checks,
-    "bizimhesap_refund_idempotent",
+    "parasut_refund_idempotent",
     refundAgain.skipped === true && refundAgain.meta.at === refundMeta?.at,
     `skipped=${refundAgain.skipped} at=${refundAgain.meta.at}`,
     logger
@@ -825,14 +827,14 @@ export default async function smokeFullFlow({ container }: ExecArgs) {
   )
 
   // Explicitly try refund invoice — must skip / not write issued
-  const refundInvSkip = await flagRefundInvoiceForReturn(container, {
+  const refundInvSkip = await issueRefundInvoiceForReturn(container, {
     return_id: rejReturn.id,
     order_id: paidB.orderId,
     amount: paidB.itemTotal,
   })
   add(
     checks,
-    "reject_no_bizimhesap_refund_flag",
+    "reject_no_parasut_refund_flag",
     refundInvSkip.skipped === true &&
       refundInvSkip.meta.note === "escay_rejection",
     JSON.stringify(refundInvSkip.meta),
@@ -850,7 +852,7 @@ export default async function smokeFullFlow({ container }: ExecArgs) {
     !wroteRefundForReject,
     wroteRefundForReject
       ? `UNEXPECTED flag: ${JSON.stringify(afterReject.refunds[rejReturn.id])}`
-      : "bizimhesap_refund_invoices[return] yok",
+      : "parasut_refund_invoices[return] yok",
     logger
   )
 

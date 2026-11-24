@@ -678,7 +678,7 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
                   <Text size="small" className="text-ui-fg-error">
                     Ödeme PayTR ile alınmamış (havale).{" "}
                     {formatTL(r.metadata.paytr_refund.amount ?? 0)} tutarını
-                    müşterinin IBAN&apos;ına havale edin, BizimHesap&apos;ta iade
+                    müşterinin IBAN&apos;ına havale edin, Paraşüt&apos;te iade
                     faturasını elle kesin ve müşteriye bilgi verin.
                   </Text>
                 ) : (

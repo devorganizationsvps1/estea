@@ -17,7 +17,7 @@ import { scriptPaymentProvidersAllowed } from "../../lib/checkout-provider-overr
  *    zorunlu değil (test betikleri ve API istemcileri için taban kural).
  *  - Fatura adresi: aynı kurallar + fatura kimliği. Kurumsal → kontrol basamaklı VKN,
  *    vergi dairesi, unvan; bireysel → TCKN varsa kontrol basamağı tutmalı. Yanlış kimlik
- *    BizimHesap'ta düzeltilemez (sorgu / silme yok), o yüzden burada kesilir.
+ *    kesilmiş e-belgede düzeltilemez (iptal + yeniden kesim gerekir), o yüzden burada kesilir.
  */
 completeCartWorkflow.hooks.validate(({ cart }) => {
   // Ödeme sağlayıcısı: Medusa pp_system_default'u her zaman kaydeder ve kendiliğinden

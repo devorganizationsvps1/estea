@@ -77,8 +77,8 @@ CONTACT_INBOX=info@esteacay.com
 RETURNS_INBOX=info@esteacay.com
 UNPAID_ORDER_TIMEOUT_MINUTES=30
 
-# Canlı-dışı işareti: gerçek iade engellenir, Omnisend/CAPI kapalı, BizimHesap DRY-RUN
-# zorlanır (BIZIMHESAP_DRY_RUN ne olursa olsun), OID öneki STG. Canlıya geçerken BOŞALT.
+# Canlı-dışı işareti: gerçek iade engellenir, Omnisend/CAPI kapalı, Paraşüt DRY-RUN
+# zorlanır (PARASUT_DRY_RUN ne olursa olsun), OID öneki STG. Canlıya geçerken BOŞALT.
 PAYTR_OID_PREFIX=STG
 PAYTR_TEST_MODE=1
 PAYTR_MERCHANT_ID=
@@ -96,15 +96,26 @@ SMTP_SECURE=false
 # Alan adı DNS'inde SPF, DKIM ve DMARC kayıtları olmadan mailler spam'e düşer.
 # Deploy sonrası logda "[smtp] Sunucu doğrulanamadı" olmamalı; SMTP_TEST_TO=<adres> npm run test:emails
 
-# BizimHesap: Es Çay'ın kendi hesabı (K14). Firm ID verilene dek boş → mock. Test ortamı yok.
-BIZIMHESAP_FIRM_ID=
-BIZIMHESAP_DRY_RUN=true
-BIZIMHESAP_DEFAULT_VAT_RATE=1
-BIZIMHESAP_SHIPPING_VAT_RATE=20
-# Stok eşitlemesi (K15). Token boş → kapalı. APPLY, test:bizimhesap:stock raporu doğrulanmadan açılmaz.
-BIZIMHESAP_TOKEN=
-BIZIMHESAP_WAREHOUSE_ID=
-BIZIMHESAP_STOCK_APPLY=false
+# Paraşüt: Es Çay'ın kendi hesabı (K14). Kimlikler verilene dek boş → mock.
+PARASUT_CLIENT_ID=
+PARASUT_CLIENT_SECRET=
+PARASUT_USERNAME=
+PARASUT_PASSWORD=
+PARASUT_COMPANY_ID=
+PARASUT_ENV=prod
+PARASUT_DRY_RUN=true
+PARASUT_DEFAULT_VAT_RATE=1
+PARASUT_SHIPPING_VAT_RATE=20
+# Ürünler Paraşüt'te stok takibi açık olarak elle açılır; kod kendisi ürün açmasın.
+PARASUT_PRODUCT_CREATE=false
+# İade faturası Paraşüt'ten elle kesilir; API ile kesim gerçek hesapta denenmeden açılmaz.
+PARASUT_REFUND_INVOICE_AUTO=false
+# Stok eşitlemesi (K15). APPLY, test:stock raporu doğrulanmadan açılmaz.
+PARASUT_STOCK_APPLY=false
+# Shopside (K16). Kimlik boş → kapalı. APPLY, test:shopside + test:stock doğrulanmadan açılmaz.
+SHOPSIDE_API_KEY=
+SHOPSIDE_API_SECRET=
+SHOPSIDE_STOCK_APPLY=false
 
 SHIPPING_CARRIER=
 SHIPPING_CARRIER_TEST_MODE=true
@@ -197,8 +208,8 @@ ulaşamadığı her dakika "para çekildi, sipariş iptal" riskidir (Mareen #9).
 3. DNS: `api`, `market`, apex/`www` → 187.77.69.91; Generate Domain'leri sil. Geçiş sırasında callback
    sayfası eski IP'ye giderse PayTR retry eder; temizlik işi (`UNPAID_ORDER_TIMEOUT_MINUTES`) geç gelen
    success'i artık iade etmez, uyarı maili + elle inceleme ister.
-4. backend: tüm `http://<…>` → `https://…`; `COOKIE_SECURE` satırını sil; `BIZIMHESAP_DRY_RUN=false`
-   mali müşavir onayıyla. Not: `PAYTR_OID_PREFIX` dolu kaldıkça BizimHesap'a hiçbir şey gönderilmez;
+4. backend: tüm `http://<…>` → `https://…`; `COOKIE_SECURE` satırını sil; `PARASUT_DRY_RUN=false`
+   mali müşavir onayıyla. Not: `PAYTR_OID_PREFIX` dolu kaldıkça Paraşüt'te yalnız taslak açılır, e-belge kesilmez;
    gerçek kayıt ancak 7. adımda önek boşalınca başlar. Deploy sonrası
    `/health/revision` commit hash'i push edilenle aynı mı kontrol et.
 5. frontend: `SITE_URL=https://market.esteacay.com`, `MEDUSA_BACKEND_URL=https://api.esteacay.com`, `COOKIE_SECURE` sil → **rebuild** (NEXT_PUBLIC_* gömülü).

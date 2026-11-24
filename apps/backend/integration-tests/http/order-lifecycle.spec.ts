@@ -39,7 +39,7 @@ medusaIntegrationTestRunner({
     PAYTR_MOCK: "1",
     SHIPPING_CARRIER: "",
     COOKIE_SECURE: "false",
-    BIZIMHESAP_FIRM_ID: "",
+    PARASUT_CLIENT_ID: "",
   },
   testSuite: ({ api, getContainer }) => {
     describe("Sipariş yaşam döngüsü (admin)", () => {

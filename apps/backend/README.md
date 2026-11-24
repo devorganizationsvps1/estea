@@ -3,7 +3,8 @@
 Es Çay e-ticaret backend'i — Medusa v2.18 (Mareen altyapısından türetildi; bkz. kök `ES-CAY-BLUEPRINT.md`).
 
 - Ödeme: PayTR iFrame (`src/modules/paytr`) + Havale/EFT (`src/modules/bank-transfer`)
-- Fatura: BizimHesap (`src/modules/bizimhesap`, `BIZIMHESAP_FIRM_ID` yoksa mock)
+- Fatura + stok kaynağı: Paraşüt (`src/modules/parasut`, `PARASUT_*` yoksa mock)
+- Pazaryeri stoğu: Shopside (`src/modules/shopside`, `SHOPSIDE_API_KEY` yoksa kapalı)
 - Kargo: generic adaptör katmanı (`src/modules/carrier/README.md`); firma seçilene kadar elle kargo
 - E-posta: SMTP (`src/modules/smtp-notification`), idempotent bildirimler (`src/lib/notify.ts`)
 - Operasyon: `ops_event` (admin "Logs"), iade/değişim akışı, etiket PDF'leri, sipariş zaman çizelgesi

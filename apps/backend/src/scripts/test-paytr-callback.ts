@@ -39,10 +39,10 @@ import {
 import { computeCallbackHash, paytrOidPrefix } from "../modules/paytr/hash"
 import { cancelUnpaidOrderIfSafe } from "../modules/paytr/order-guards"
 import {
-  isMockMode as isBizimhesapMockMode,
-  isBizimhesapDryRun,
-  normalizeOptions as normalizeBizimhesapOptions,
-} from "../modules/bizimhesap/options"
+  isMockMode as isParasutMockMode,
+  isParasutDryRun,
+  normalizeOptions as normalizeParasutOptions,
+} from "../modules/parasut/options"
 import { carrierTestMode, isCarrierConfigured } from "../modules/carrier/registry"
 
 const BACKEND = (process.env.MEDUSA_BACKEND_URL || "http://localhost:9000").replace(/\/$/, "")
@@ -81,12 +81,16 @@ function preflight() {
     refuse(`PAYTR_TEST_MODE="${testMode || "(boş)"}" — gerçek get-token yalnızca 1 ile.`)
   }
 
-  const bizimhesap = normalizeBizimhesapOptions({
-    firmId: process.env.BIZIMHESAP_FIRM_ID,
-    dryRun: process.env.BIZIMHESAP_DRY_RUN,
+  const parasut = normalizeParasutOptions({
+    clientId: process.env.PARASUT_CLIENT_ID,
+    clientSecret: process.env.PARASUT_CLIENT_SECRET,
+    username: process.env.PARASUT_USERNAME,
+    password: process.env.PARASUT_PASSWORD,
+    companyId: process.env.PARASUT_COMPANY_ID,
+    dryRun: process.env.PARASUT_DRY_RUN,
   })
-  if (!isBizimhesapMockMode(bizimhesap) && !isBizimhesapDryRun(bizimhesap)) {
-    refuse("BizimHesap canlı kimlikli ve BIZIMHESAP_DRY_RUN kapalı — capture gerçek fatura kaydı açar.")
+  if (!isParasutMockMode(parasut) && !isParasutDryRun(parasut)) {
+    refuse("Paraşüt canlı kimlikli ve PARASUT_DRY_RUN kapalı — sipariş teslim edilirse gerçek fatura kesilir.")
   }
 
   if (isCarrierConfigured() && !carrierTestMode()) {

@@ -4,7 +4,7 @@ import { useEffect } from "react"
 /**
  * Sipariş sayfasında Medusa'nın kendi iade / değişim / talep / düzenleme /
  * gönderi / para iadesi butonlarını gizler. Bunlar Es Çay akışını (PayTR,
- * BizimHesap, kargo, stok, mailler) atlar; işlemler sağdaki Es Çay kutularından
+ * Paraşüt, kargo, stok, mailler) atlar; işlemler sağdaki Es Çay kutularından
  * yapılır (İade, Değişim, Sipariş durumu, Kargo).
  *
  * Link butonları CSS ile (menüler portalda açıldığı için küresel stil); yalnız

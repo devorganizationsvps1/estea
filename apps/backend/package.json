@@ -1,7 +1,7 @@
 {
   "name": "escay-backend",
   "version": "0.0.1",
-  "description": "Es Çay — Medusa v2 backend (PayTR, havale, BizimHesap, generic kargo katmanı)",
+  "description": "Es Çay — Medusa v2 backend (PayTR, havale, Paraşüt, Shopside, generic kargo katmanı)",
   "license": "MIT",
   "keywords": [
     "postgres",
@@ -52,8 +52,11 @@
     "test:return-refund": "npx tsx src/scripts/test-return-refund.ts",
     "test:smoke:full": "PAYTR_MOCK=1 medusa exec ./src/scripts/smoke-full-flow.ts",
     "test:smoke:link-guest": "medusa exec ./src/scripts/smoke-link-guest-orders.ts",
-    "test:bizimhesap": "medusa exec ./src/scripts/test-bizimhesap-invoice.ts",
-    "test:bizimhesap:stock": "medusa exec ./src/scripts/test-bizimhesap-stock.ts",
+    "test:parasut:draft": "PARASUT_DRY_RUN=true medusa exec ./src/scripts/test-parasut-draft.ts",
+    "parasut:product-match": "medusa exec ./src/scripts/parasut-product-match.ts",
+    "parasut:apply-mapping": "medusa exec ./src/scripts/parasut-apply-mapping.ts",
+    "test:stock": "medusa exec ./src/scripts/test-stock-sync.ts",
+    "test:shopside": "medusa exec ./src/scripts/test-shopside.ts",
     "test:staging:backend": "npx tsx src/scripts/staging-smoke/run.ts",
     "test:staging:omnisend": "node src/scripts/omnisend-smoke.mjs",
     "lint": "medusa lint",

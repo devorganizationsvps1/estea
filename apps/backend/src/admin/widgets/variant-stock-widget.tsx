@@ -164,7 +164,7 @@ const VariantStockWidget = () => {
             {variant.title ? ` · ${variant.title}` : ""}
           </Text>
           <Text size="small" className="pt-1 text-ui-fg-subtle">
-            BizimHesap stok eşitlemesi açıkken buradaki değişiklik en geç 5 dakikada BizimHesap'taki değerle ezilir.
+            Paraşüt stok eşitlemesi açıkken buradaki değişiklik en geç 5 dakikada Paraşüt'teki değerle ezilir.
           </Text>
         </div>
       </div>
