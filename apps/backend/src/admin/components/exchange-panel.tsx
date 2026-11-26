@@ -7,6 +7,7 @@ import { InlineConfirm, type ConfirmSpec } from "./inline-confirm"
 import { EXCHANGE_NOTHING_ACCEPTED, exchangeDisplayState, readExchange, type ExchangeMeta } from "../../lib/exchange-plan"
 import { ExchangeForm, EXCHANGE_STATE_BADGE, postJson, type ExchangeFormLine } from "./exchange-form"
 import { printExchangeLabels, skippedLabelsMessage } from "../lib/print-labels"
+import { skippedShipmentMessage } from "../lib/skipped-shipment"
 
 type ReturnRow = {
   id: string
@@ -90,11 +91,18 @@ export const ExchangePanel = ({
     void qc.invalidateQueries()
     for (const ms of [3000, 8000]) window.setTimeout(() => void qc.invalidateQueries(), ms)
   }
-  const run = async (key: string, fn: () => Promise<unknown>, ok: string) => {
+  /** notice: sonuç iş yapılmadığını söylüyorsa (ör. atlanan gönderi) başarı yerine gösterilecek metin. */
+  const run = async (
+    key: string,
+    fn: () => Promise<unknown>,
+    ok: string,
+    notice?: (result: unknown) => string | null
+  ) => {
     setBusy(key)
     try {
-      await fn()
-      toast.success(ok)
+      const info = notice?.(await fn())
+      if (info) toast.info(info)
+      else toast.success(ok)
       setMode(null)
       refresh()
     } catch (err) {
@@ -239,7 +247,7 @@ export const ExchangePanel = ({
                           lines: ex.items.map((it) => `${it.quantity} × ${it.title} ${it.to_variant || ""}`.trim()),
                           confirmLabel: "Gönderiyi aç",
                           onConfirm: () =>
-                            void run(`ship:${r.id}`, () => postJson(`/admin/returns/${r.id}/exchange/ship`), "Yeni ürünün gönderisi açıldı"),
+                            void run(`ship:${r.id}`, () => postJson(`/admin/returns/${r.id}/exchange/ship`), "Yeni ürünün gönderisi açıldı", skippedShipmentMessage),
                         },
                       })
                     }

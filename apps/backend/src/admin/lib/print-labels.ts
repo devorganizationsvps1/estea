@@ -97,3 +97,33 @@ export async function printExchangeLabels(keys: string[], withSlip = false): Pro
   const ids = encodeURIComponent(keys.join(","))
   return printLabels(`/admin/escay-labels/exchanges?ids=${ids}`, withSlip)
 }
+
+/**
+ * Reddedilen ürünün geri gönderim etiketi: DHL'de ZPL dosyası iner, diğer firmalarda PDF
+ * pencerede açılır. Pencere tıklama anında açılır (popup engelleyici).
+ */
+export async function printSendBackLabel(returnId: string): Promise<void> {
+  const win = window.open("", "_blank")
+  try {
+    if (win) win.document.body.innerText = "Etiket hazırlanıyor…"
+  } catch {
+    // about:blank'e yazılamıyorsa yalnızca bekleme metni eksik kalır.
+  }
+  try {
+    const res = await fetch(`/admin/returns/${returnId}/send-back/label`, { credentials: "include" })
+    if (!res.ok) throw new Error(await errorMessage(res))
+    const blob = await res.blob()
+    if ((res.headers.get("Content-Type") || "").includes("pdf")) {
+      const blobUrl = URL.createObjectURL(blob)
+      if (win) win.location.href = blobUrl
+      else window.location.href = blobUrl
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000)
+      return
+    }
+    win?.close()
+    download(blob, fileNameFrom(res, "geri-gonderim-etiket.zpl"))
+  } catch (error) {
+    win?.close()
+    throw error
+  }
+}

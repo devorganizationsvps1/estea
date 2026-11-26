@@ -11,6 +11,13 @@ import { errorText } from "./ops-events"
 import { resolveLocking } from "../modules/paytr/order-guards"
 import { isReturnRejected } from "./return-rejection"
 import { returnLockKey } from "./return-lock"
+import {
+  newSendBack,
+  normalizePhotos,
+  SEND_BACK_META_KEY,
+  sendBackItemsFromAcceptance,
+  type RejectionPhoto,
+} from "./return-rejection-plan"
 
 /**
  * Ürün bazlı iade kabulü (admin, paket geldiğinde).
@@ -18,7 +25,9 @@ import { returnLockKey } from "./return-lock"
  * Her iade kalemi için:
  *   restock_quantity  → kabul, stoğa eklenir (Medusa receive-items)
  *   damaged_quantity  → kabul, para iade edilir ama stoğa EKLENMEZ (Medusa dismiss-items)
- *   kalan             → kabul edilmedi, para iadesi yok (metadata.escay_acceptance)
+ *   kalan             → kabul edilmedi, para iadesi yok (metadata.escay_acceptance);
+ *                       sebep + fotoğraf zorunlu, ürün müşteriye geri gönderilir
+ *                       (metadata.escay_send_back, bkz. return-send-back.ts)
  *
  * Confirm sonrası order.return_received → processReturnRefund yalnız received_quantity
  * (restock + damaged) için para iade eder; kısmi kabulde status = partially_received.
@@ -36,6 +45,8 @@ export type ReturnAcceptanceMeta = {
   reason: string | null
   /** Admin "Kargo ücretini de iade et" — processReturnRefund kargoyu sebepten bağımsız ekler. */
   refund_shipping?: boolean
+  /** Kabul edilmeyen ürünlerin inceleme fotoğrafları (itirazda kanıt) */
+  photos?: RejectionPhoto[]
   items: { item_id: string; requested: number; restock: number; damaged: number; rejected: number }[]
 }
 
@@ -96,6 +107,7 @@ export async function acceptReturnItems(
     items: AcceptanceInput[]
     reason?: string | null
     refund_shipping?: boolean
+    photos?: unknown
     actor_id?: string | null
   }
 ): Promise<{ acceptance: ReturnAcceptanceMeta; partial: boolean }> {
@@ -126,17 +138,36 @@ async function run(
 
   const plan = planReturnAcceptance(ret.items || [], input.items || [])
   const partial = plan.items.some((i) => i.rejected > 0)
+  const photos = partial ? normalizePhotos(input.photos) : []
+  if (partial && !input.reason?.trim()) {
+    throw new Error("Kabul edilmeyen ürün için sebep yazın; müşteri bu açıklamayı görür.")
+  }
+  if (partial && !photos.length) {
+    throw new Error("Kabul edilmeyen ürünün en az bir fotoğrafını ekleyin; itirazda kanıt olarak kullanılır.")
+  }
   const acceptance: ReturnAcceptanceMeta = {
     at: new Date().toISOString(),
     by: input.actor_id || null,
     reason: input.reason?.trim() || null,
     ...(input.refund_shipping === true ? { refund_shipping: true } : {}),
+    ...(photos.length ? { photos } : {}),
     items: plan.items,
   }
+  // Kabul edilmeyen adetler müşterinin malı: geri gönderim kaydı kabul ile aynı yazımda açılır.
+  const sendBack = partial ? newSendBack("partial_acceptance", sendBackItemsFromAcceptance(plan.items)) : null
 
   // Kabul kaydı receive'den ÖNCE: refund maili kabul edilmeyenleri buradan okur.
   await container.resolve(Modules.ORDER).updateReturns([
-    { selector: { id: ret.id }, data: { metadata: { ...(ret.metadata || {}), escay_acceptance: acceptance } } },
+    {
+      selector: { id: ret.id },
+      data: {
+        metadata: {
+          ...(ret.metadata || {}),
+          escay_acceptance: acceptance,
+          ...(sendBack ? { [SEND_BACK_META_KEY]: sendBack } : {}),
+        },
+      },
+    },
   ])
 
   await beginReceiveReturnWorkflow(container).run({
@@ -162,7 +193,10 @@ async function run(
         .warn(`[return-accept] receive iptal edilemedi return=${ret.id}: ${errorText(cancelErr)}`)
     }
     await container.resolve(Modules.ORDER).updateReturns([
-      { selector: { id: ret.id }, data: { metadata: { ...(ret.metadata || {}), escay_acceptance: null } } },
+      {
+        selector: { id: ret.id },
+        data: { metadata: { ...(ret.metadata || {}), escay_acceptance: null, ...(sendBack ? { [SEND_BACK_META_KEY]: null } : {}) } },
+      },
     ])
     throw new Error(`Teslim alınamadı: ${errorText(err)}`)
   }

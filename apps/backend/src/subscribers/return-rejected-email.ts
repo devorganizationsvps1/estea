@@ -3,6 +3,7 @@ import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils"
 import { buildReturnRejectedCustomerEmail } from "../emails/return-notifications"
 import { loadReturnEmailContext } from "../lib/return-email-context"
 import { createNotificationIdempotent } from "../lib/notify"
+import { normalizePhotos } from "../lib/return-rejection-plan"
 
 export type ReturnRejectedEvent = {
   return_id: string
@@ -35,12 +36,15 @@ export default async function returnRejectedEmailHandler({
       return
     }
 
+    const rejection = (ctx.metadata.escay_rejection || {}) as Record<string, unknown>
     const mail = buildReturnRejectedCustomerEmail({
       returnId: ctx.returnId,
       orderDisplayId: ctx.orderDisplayId,
       email: ctx.email,
-      reason: data.reason ?? null,
+      reason: (typeof rejection.reason === "string" && rejection.reason) || data.reason || null,
       items: ctx.items,
+      stage: rejection.stage === "before_arrival" || rejection.stage === "inspected" ? rejection.stage : null,
+      photos: normalizePhotos(rejection.photos),
     })
 
     const notificationService = container.resolve(Modules.NOTIFICATION)

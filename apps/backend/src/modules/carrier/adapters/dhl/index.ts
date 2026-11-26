@@ -186,6 +186,14 @@ export function createDhlAdapter(deps: DhlAdapterDeps = {}): CarrierAdapter {
   }
 
   function guardWrite(o: DhlOptions, testMode: boolean) {
+    // Canlı sunucuda gerçek gönderi istenmiş ama host sandbox: sipariş sandbox'ta açılır,
+    // basılan etiket şubede geçersizdir. PayTR env-guard'ın kargo karşılığı.
+    if (o.env === "sandbox" && !testMode && (process.env.NODE_ENV || "").trim() === "production") {
+      throw new CarrierError(
+        "SHIPPING_CARRIER_TEST_MODE=false (gerçek gönderi) ama DHL_ENV=prod değil — gönderi sandbox'ta açılırdı. Canlı için DHL_ENV=prod, deneme için SHIPPING_CARRIER_TEST_MODE=true.",
+        { code: "DHL_CONFIG" }
+      )
+    }
     if (o.env === "prod" && testMode) {
       throw new CarrierError("DHL_ENV=prod iken test modunda gönderi açılmaz — gerçek gönderi için SHIPPING_CARRIER_TEST_MODE=false.", {
         code: "DHL_TEST_MODE_PROD",
@@ -312,7 +320,7 @@ export function createDhlAdapter(deps: DhlAdapterDeps = {}): CarrierAdapter {
               alert: {
                 level: "error" as const,
                 title: "DHL etiketi saatlerdir alınamıyor (varış şubesi yok)",
-                detail: `${ref}: ${Math.round(ageMin)} dk. Adres/ilçe DHL'de eşleşmiyor olabilir — adresi kontrol edin, entegrasyon.tr@dhl.com'a yazın; düzelince yoklama etiketi kendisi alır.`,
+                detail: `${ref}: ${Math.round(ageMin)} dk. Adres/ilçe DHL'de eşleşmiyor olabilir. DHL kaydı ilk gönderilen adresle açıldı: sipariş adresini düzeltmek o kaydı DEĞİŞTİRMEZ. Adres yanlışsa düzeltip sipariş sayfasından "Gönderiyi yeniden aç" deyin (DHL kaydı iptal edilip yeni adresle açılır); adres doğruysa entegrasyon.tr@dhl.com'a yazın, DHL düzeltince yoklama etiketi kendisi alır.`,
               },
             }
           : {}),

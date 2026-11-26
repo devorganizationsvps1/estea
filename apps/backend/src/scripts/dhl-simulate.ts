@@ -373,7 +373,7 @@ async function seed(container: MedusaContainer, logger: Logger, only: string[]) 
           : null
         notes.push(code ? `iade kodu ${code}` : "iade talebi açıldı (kod: backend çalışırken üretilir)")
         if (s.after === "return_rejected") {
-          await rejectStoreReturn(container, { return_id: ret.id, reason: "Simülasyon: ürün kullanılmış", rejected_by: "simulation" })
+          await rejectStoreReturn(container, { return_id: ret.id, stage: "before_arrival", reason_code: "other", note: "Simülasyon: iade kapsamı dışında", rejected_by: "simulation" })
           notes.push("iade reddedildi")
         }
         if (s.after === "return_received") {

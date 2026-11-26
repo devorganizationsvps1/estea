@@ -168,6 +168,8 @@ describe("DHL yanıt ayrıştırma", () => {
     const s = parseShipmentStatus([{ shipmentStatusCode: 4, isDelivered: 1, shipmentStatus: "Teslim_Edildi", trackingUrl: "www.mngkargo.com.tr/track/1" }])
     expect(s).toMatchObject({ action: "delivered", description: "Teslim Edildi", trackingUrl: "https://www.mngkargo.com.tr/track/1" })
     expect(parseShipmentStatus({ shipmentStatusCode: 6, retrieveShipmentId: "77" }).action).toBe("returned")
+    // İade paketi göndericiye teslim: DHL "teslim edildi" dese de müşteriye teslim sayılmaz.
+    expect(parseShipmentStatus({ shipmentStatusCode: 5, isDelivered: 1, retrieveShipmentId: "77" }).action).toBe("returned")
     expect(parseShipmentStatus({ shipmentStatus: "Teslim edilemedi" }).action).toBe("failed")
   })
 })

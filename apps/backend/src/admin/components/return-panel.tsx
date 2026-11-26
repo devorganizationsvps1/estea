@@ -1,9 +1,18 @@
-import { Badge, Button, Checkbox, Container, Heading, Input, Label, Text, toast } from "@medusajs/ui"
+import { Badge, Button, Checkbox, Container, Heading, Input, Label, RadioGroup, Select, Text, toast } from "@medusajs/ui"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
 import { formatDateTime } from "../lib/dates"
 import { formatTL } from "../lib/money"
+import {
+  REJECTION_REASONS,
+  readSendBack,
+  type RejectionReasonCode,
+  type RejectionStage,
+  type SendBackMeta,
+} from "../../lib/return-rejection-plan"
 import { InlineConfirm, type ConfirmSpec } from "./inline-confirm"
+import { PhotoUpload, type Photo } from "./photo-upload"
+import { SendBackPanel } from "./send-back-panel"
 
 export type ReturnRow = {
   id: string
@@ -18,9 +27,11 @@ export type ReturnRow = {
     rejected?: boolean
     escay_acceptance?: {
       reason?: string | null
+      photos?: Photo[]
       items?: { item_id: string; requested: number; restock: number; damaged: number; rejected: number }[]
     } | null
-    escay_rejection?: { rejected?: boolean; reason?: string | null }
+    escay_rejection?: { rejected?: boolean; reason?: string | null; stage?: RejectionStage; photos?: Photo[] }
+    escay_send_back?: SendBackMeta | null
     escay_exchange?: { status?: string } | null
     escay_cancel?: { at?: string; reason?: string | null } | null
     paytr_refund?: {
@@ -56,12 +67,32 @@ export function statusLabel(r: ReturnRow): { label: string; color: "green" | "or
 
 type AcceptRow = { restock: number; damaged: number }
 
+type RejectDraft = { stage?: RejectionStage; code?: RejectionReasonCode; note: string; photos: Photo[] }
+const EMPTY_REJECT: RejectDraft = { note: "", photos: [] }
+
+/** Müşteriye mailde giden inceleme fotoğrafları (küçük görsel, tıklayınca tam boy). */
+function PhotoStrip({ photos }: { photos?: Photo[] | null }) {
+  if (!photos?.length) return null
+  return (
+    <ul className="m-0 flex list-none flex-wrap gap-2 p-0">
+      {photos.map((p, i) => (
+        <li key={p.url}>
+          <a href={p.url} target="_blank" rel="noreferrer">
+            <img src={p.url} alt={`İnceleme fotoğrafı ${i + 1}`} className="h-16 w-16 rounded-md border border-ui-border-base object-cover" />
+          </a>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 /** Ürün bazlı teslim alma — kabul edilenler için para iadesi otomatik (kabul edilmeyen kalem iade almaz). */
 async function acceptItems(
   returnId: string,
   rows: Record<string, AcceptRow>,
   reason: string,
-  refundShipping: boolean
+  refundShipping: boolean,
+  photos: Photo[]
 ) {
   const res = await fetch(`/admin/returns/${returnId}/accept`, {
     method: "POST",
@@ -75,6 +106,7 @@ async function acceptItems(
       })),
       reason: reason.trim() || null,
       refund_shipping: refundShipping,
+      photos,
     }),
   })
   const json = await res.json().catch(() => ({}))
@@ -160,7 +192,11 @@ function PackageArrivedButton({ ret, open, onToggle }: { ret: ReturnRow; open: b
 
 export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?: string }) => {
   const qc = useQueryClient()
-  const [reasonById, setReasonById] = useState<Record<string, string>>({})
+  const [rejectById, setRejectById] = useState<Record<string, RejectDraft>>({})
+  const setReject = (id: string, patch: Partial<RejectDraft>) =>
+    setRejectById((prev) => ({ ...prev, [id]: { ...(prev[id] || EMPTY_REJECT), ...patch } }))
+  // Kısmi kabulde kabul edilmeyen ürünün fotoğrafları
+  const [partialPhotosById, setPartialPhotosById] = useState<Record<string, Photo[]>>({})
   const [codeById, setCodeById] = useState<Record<string, string>>({})
   // Reddet / talebi iptal: nadir işlemler, "Diğer işlemler" açılınca görünür
   const [moreById, setMoreById] = useState<Record<string, boolean>>({})
@@ -290,12 +326,12 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
   })
 
   const receiveMut = useMutation({
-    mutationFn: (input: { ret: ReturnRow; rows: Record<string, AcceptRow>; reason: string; refundShipping: boolean }) =>
-      acceptItems(input.ret.id, input.rows, input.reason, input.refundShipping),
+    mutationFn: (input: { ret: ReturnRow; rows: Record<string, AcceptRow>; reason: string; refundShipping: boolean; photos: Photo[] }) =>
+      acceptItems(input.ret.id, input.rows, input.reason, input.refundShipping, input.photos),
     onSuccess: (json) => {
       toast.success(
         json?.partial
-          ? "Kısmen kabul edildi — kabul edilenlerin parası iade ediliyor"
+          ? "Kısmen kabul edildi. Kabul edilenlerin parası iade ediliyor; kabul edilmeyeni aşağıdan geri gönderin"
           : "Teslim alındı — para iadesi başlatıldı"
       )
       // Para iadesi + fatura arka planda; birkaç saniye sonra durum güncellensin.
@@ -328,21 +364,33 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
   })
 
   const rejectMut = useMutation({
-    mutationFn: async (input: { returnId: string; reason: string }) => {
+    mutationFn: async (input: { returnId: string; draft: RejectDraft; stage: RejectionStage }) => {
       const res = await fetch(`/admin/returns/${input.returnId}/reject`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason: input.reason || null }),
+        body: JSON.stringify({
+          stage: input.stage,
+          reason_code: input.draft.code,
+          note: input.draft.note.trim() || null,
+          photos: input.stage === "inspected" ? input.draft.photos : [],
+        }),
       })
-      const json = await res.json()
+      const json = await res.json().catch(() => ({}))
       if (!res.ok) {
         throw new Error(json?.message || `HTTP ${res.status}`)
       }
-      return json
+      return json as { return_code?: { state: "none" | "manual" | "canceled" | "failed"; code: string | null } }
     },
-    onSuccess: () => {
-      toast.success("İade reddedildi — para iadesi yapılmayacak")
+    onSuccess: (json, input) => {
+      const code = json.return_code
+      if (code && (code.state === "manual" || code.state === "failed")) {
+        toast.warning(`İade reddedildi. İade kodu ${code.code} kargo firmasında açık kaldı; kargo panelinden iptal edin.`)
+      } else if (input.stage === "inspected") {
+        toast.success("İade reddedildi. Ürünü aşağıdan müşteriye geri gönderin")
+      } else {
+        toast.success(code?.state === "canceled" ? "İade reddedildi, kargo iade kodu iptal edildi" : "İade reddedildi")
+      }
       qc.invalidateQueries({ queryKey: ["escay-order-returns", orderId] })
     },
     onError: (err: Error) => {
@@ -390,6 +438,17 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
         {returns.map((r) => {
           const st = statusLabel(r)
           const rejected = isRejected(r)
+          const sendBack = readSendBack(r.metadata as Record<string, unknown> | null)
+          // Paket teslim alınmışsa ret her zaman "incelendi"dir.
+          const inHand = r.status === "received" || r.status === "partially_received"
+          const draft = rejectById[r.id] || EMPTY_REJECT
+          const stage: RejectionStage | undefined = inHand ? "inspected" : draft.stage
+          const reasons = stage ? REJECTION_REASONS.filter((x) => x.stages.includes(stage)) : []
+          const reasonCode = reasons.some((x) => x.code === draft.code) ? draft.code : undefined
+          const rejectReady =
+            Boolean(stage && reasonCode) &&
+            (reasonCode !== "other" || Boolean(draft.note.trim())) &&
+            (stage !== "inspected" || draft.photos.length > 0)
           const canReject =
             !rejected &&
             r.metadata?.paytr_refund?.status !== "success" &&
@@ -433,6 +492,7 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
                   Kabul edilmeme sebebi: {r.metadata.escay_acceptance.reason}
                 </Text>
               ) : null}
+              <PhotoStrip photos={r.metadata?.escay_acceptance?.photos} />
               {r.metadata?.customer_note ? (
                 <Text size="small" className="text-ui-fg-subtle">
                   Müşteri notu: {r.metadata.customer_note}
@@ -575,13 +635,25 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
                           )
                         })}
                         {rejectedQty > 0 ? (
-                          <Input
-                            size="small"
-                            aria-label="Kabul edilmeme sebebi"
-                            placeholder="Kabul edilmeme sebebi (müşteriye mailde görünür)"
-                            value={partialReasonById[r.id] || ""}
-                            onChange={(e) => setPartialReasonById((prev) => ({ ...prev, [r.id]: e.target.value }))}
-                          />
+                          <div className="flex flex-col gap-2">
+                            <Text size="small" className="text-ui-fg-subtle">
+                              Kabul edilmeyen ürün müşteriye geri gönderilir. Sebebi ve fotoğrafı müşteri mailde görür; itirazda kanıt olur.
+                            </Text>
+                            <div className="flex flex-col gap-1">
+                              <Label size="xsmall" htmlFor={`partial-reason-${r.id}`}>Kabul edilmeme sebebi</Label>
+                              <Input
+                                id={`partial-reason-${r.id}`}
+                                size="small"
+                                value={partialReasonById[r.id] || ""}
+                                onChange={(e) => setPartialReasonById((prev) => ({ ...prev, [r.id]: e.target.value }))}
+                              />
+                            </div>
+                            <PhotoUpload
+                              id={`partial-photos-${r.id}`}
+                              photos={partialPhotosById[r.id] || []}
+                              onChange={(next) => setPartialPhotosById((prev) => ({ ...prev, [r.id]: next }))}
+                            />
+                          </div>
                         ) : null}
                         {shippingTotal > 0 ? (
                           <div className="flex items-start gap-2">
@@ -603,7 +675,12 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
                               (previewMut.isPending && previewMut.variables?.returnId === r.id) ||
                               (receiveMut.isPending && receiveMut.variables?.ret.id === r.id)
                             }
-                            disabled={receiveMut.isPending || previewMut.isPending || accepted === 0}
+                            disabled={
+                              receiveMut.isPending ||
+                              previewMut.isPending ||
+                              accepted === 0 ||
+                              (rejectedQty > 0 && (!(partialReasonById[r.id] || "").trim() || !(partialPhotosById[r.id] || []).length))
+                            }
                             onClick={async () => {
                               // Kesin tutar sunucudan: gerçek iadeyle aynı hesap.
                               const preview = await previewMut.mutateAsync({ returnId: r.id, rows, refundShipping: ship }).catch(() => null)
@@ -614,14 +691,20 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
                                 return `${lineTitle.get(it.item_id as string) || "Ürün"}: ${[
                                   row.restock ? `${row.restock} adet stoğa döner` : null,
                                   row.damaged ? `${row.damaged} adet hasarlı (stoğa girmez)` : null,
-                                  left ? `${left} adet kabul edilmedi (parası iade edilmez)` : null,
+                                  left ? `${left} adet kabul edilmedi (parası iade edilmez, müşteriye geri gönderilir)` : null,
                                 ]
                                   .filter(Boolean)
                                   .join(", ")}`
                               })
                               if (preview.shipping_included) lines.push(`Kargo ücreti dahil: ${formatTL(preview.shipping_amount)}`)
                               const run = () =>
-                                receiveMut.mutate({ ret: r, rows, reason: partialReasonById[r.id] || "", refundShipping: ship })
+                                receiveMut.mutate({
+                                  ret: r,
+                                  rows,
+                                  reason: partialReasonById[r.id] || "",
+                                  refundShipping: ship,
+                                  photos: rejectedQty > 0 ? partialPhotosById[r.id] || [] : [],
+                                })
                               ask(
                                 r.id,
                                 "receive",
@@ -670,8 +753,22 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
               ) : null}
               {rejected && r.metadata?.escay_rejection?.reason ? (
                 <Text size="small" className="text-ui-fg-subtle">
+                  {r.metadata.escay_rejection.stage === "before_arrival"
+                    ? "Paket gelmeden reddedildi. "
+                    : r.metadata.escay_rejection.stage === "inspected"
+                      ? "Ürün incelendi, reddedildi. "
+                      : ""}
                   Sebep: {r.metadata.escay_rejection.reason}
                 </Text>
+              ) : null}
+              {rejected ? <PhotoStrip photos={r.metadata?.escay_rejection?.photos} /> : null}
+              {sendBack ? (
+                <SendBackPanel
+                  returnId={r.id}
+                  sendBack={sendBack}
+                  lineTitle={lineTitle}
+                  onChanged={() => void qc.invalidateQueries({ queryKey: ["escay-order-returns", orderId] })}
+                />
               ) : null}
               {r.metadata?.paytr_refund?.status === "failed" ? (
                 r.metadata.paytr_refund.manual_required ? (
@@ -726,35 +823,122 @@ export const ReturnPanel = ({ orderId, returnId }: { orderId: string; returnId?:
                           İadeyi reddet
                         </Text>
                         <Text size="small" className="text-ui-fg-subtle">
-                          Ürün iade şartlarına uymuyorsa. Para iadesi yapılmaz, müşteriye ret maili gider.
+                          Talep iade şartlarına uymuyorsa. Para iadesi yapılmaz, müşteriye sebebiyle ret maili gider.
                         </Text>
-                        <Input
-                          aria-label="Red sebebi"
-                          placeholder="Red sebebi (müşteriye mailde görünür)"
-                          value={reasonById[r.id] || ""}
-                          onChange={(e) =>
-                            setReasonById((prev) => ({
-                              ...prev,
-                              [r.id]: e.target.value,
-                            }))
-                          }
-                        />
+                        {inHand ? null : (
+                          <div className="flex flex-col gap-2">
+                            <Text size="small" id={`reject-stage-${r.id}`}>Paket elinize ulaştı mı?</Text>
+                            <RadioGroup
+                              aria-labelledby={`reject-stage-${r.id}`}
+                              value={draft.stage || ""}
+                              onValueChange={(v) => {
+                                setReject(r.id, { stage: v as RejectionStage })
+                                setPending(null)
+                              }}
+                            >
+                              <div className="flex items-start gap-2">
+                                <RadioGroup.Item value="before_arrival" id={`reject-before-${r.id}`} />
+                                <Label htmlFor={`reject-before-${r.id}`} size="small">
+                                  Hayır, paket gelmedi. Müşteriye göndermemesi yazılır, kargo iade kodu iptal edilir.
+                                </Label>
+                              </div>
+                              <div className="flex items-start gap-2">
+                                <RadioGroup.Item value="inspected" id={`reject-inspected-${r.id}`} />
+                                <Label htmlFor={`reject-inspected-${r.id}`} size="small">
+                                  Evet, paket elimizde ve inceledim. Ürün müşteriye geri gönderilir.
+                                </Label>
+                              </div>
+                            </RadioGroup>
+                          </div>
+                        )}
+                        {stage ? (
+                          <>
+                            <div className="flex flex-col gap-1">
+                              <Label size="xsmall" htmlFor={`reject-reason-${r.id}`}>Ret sebebi</Label>
+                              <Select
+                                size="small"
+                                value={reasonCode || ""}
+                                onValueChange={(v) => {
+                                  setReject(r.id, { code: v as RejectionReasonCode })
+                                  setPending(null)
+                                }}
+                              >
+                                <Select.Trigger id={`reject-reason-${r.id}`} className="w-full max-w-[360px]">
+                                  <Select.Value placeholder="Sebep seçin" />
+                                </Select.Trigger>
+                                <Select.Content>
+                                  {reasons.map((x) => (
+                                    <Select.Item key={x.code} value={x.code}>
+                                      {x.label}
+                                    </Select.Item>
+                                  ))}
+                                </Select.Content>
+                              </Select>
+                            </div>
+                            <div className="flex flex-col gap-1">
+                              <Label size="xsmall" htmlFor={`reject-note-${r.id}`}>
+                                {reasonCode === "other" ? "Açıklama (müşteri görür)" : "Açıklama (isteğe bağlı, müşteri görür)"}
+                              </Label>
+                              <Input
+                                id={`reject-note-${r.id}`}
+                                size="small"
+                                value={draft.note}
+                                onChange={(e) => {
+                                  setReject(r.id, { note: e.target.value })
+                                  setPending(null)
+                                }}
+                              />
+                            </div>
+                            {stage === "inspected" ? (
+                              <div className="flex flex-col gap-1">
+                                <Text size="small">İnceleme fotoğrafları</Text>
+                                <Text size="small" className="text-ui-fg-subtle">
+                                  Müşteriye mailde gider; itiraz ederse kanıt olur.
+                                </Text>
+                                <PhotoUpload
+                                  id={`reject-photos-${r.id}`}
+                                  photos={draft.photos}
+                                  onChange={(next) => {
+                                    setReject(r.id, { photos: next })
+                                    setPending(null)
+                                  }}
+                                />
+                              </div>
+                            ) : null}
+                          </>
+                        ) : null}
                         <div>
                           <Button
                             variant="secondary"
                             size="small"
                             className="text-ui-fg-error"
                             isLoading={rejectMut.isPending && rejectMut.variables?.returnId === r.id}
-                            disabled={rejectMut.isPending}
-                            onClick={() =>
+                            disabled={rejectMut.isPending || !rejectReady}
+                            onClick={() => {
+                              if (!stage || !reasonCode) return
+                              const label = REJECTION_REASONS.find((x) => x.code === reasonCode)?.label || ""
+                              const note = draft.note.trim()
+                              const manualCode = r.metadata?.return_code && r.metadata.return_code_source !== "carrier"
                               ask(r.id, "reject", {
-                                text: "İade reddedilir: para iadesi yapılmaz ve müşteriye ret maili gider. Geri alınamaz.",
-                                lines: reasonById[r.id]?.trim() ? [`Müşteriye giden sebep: ${reasonById[r.id].trim()}`] : undefined,
+                                text:
+                                  stage === "before_arrival"
+                                    ? `İade reddedilir, para iadesi yapılmaz. Müşteriye paketi göndermemesi yazılır${
+                                        r.metadata?.return_code
+                                          ? manualCode
+                                            ? `. İade kodunu (${r.metadata.return_code}) siz açtınız; kargo panelinden siz iptal edin`
+                                            : " ve kargo firmasındaki iade kodu iptal edilir. Müşteri paketi kargoya verdiyse ret durur"
+                                          : ""
+                                      }. Geri alınamaz.`
+                                    : "İade reddedilir, para iadesi yapılmaz. Müşteriye sebep ve fotoğraflarla ret maili gider; ürün geri gönderilmek üzere bu sayfada bekler. Geri alınamaz.",
+                                lines: [
+                                  `Müşteriye giden sebep: ${reasonCode === "other" ? note : note ? `${label}. ${note}` : label}`,
+                                  ...(stage === "inspected" ? [`${draft.photos.length} fotoğraf`] : []),
+                                ],
                                 confirmLabel: "İadeyi reddet",
                                 danger: true,
-                                onConfirm: () => rejectMut.mutate({ returnId: r.id, reason: reasonById[r.id] || "" }),
+                                onConfirm: () => rejectMut.mutate({ returnId: r.id, draft: { ...draft, code: reasonCode }, stage }),
                               })
-                            }
+                            }}
                           >
                             İadeyi reddet
                           </Button>

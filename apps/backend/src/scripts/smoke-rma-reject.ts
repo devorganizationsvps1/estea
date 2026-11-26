@@ -109,7 +109,7 @@ export default async function smokeRmaReject({ container }: ExecArgs) {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ reason: "Smoke: ürün eksik/hasarlı" }),
+    body: JSON.stringify({ stage: "before_arrival", reason_code: "other", note: "Smoke: iade kapsamı dışında" }),
   })
   const rejBody = await rej.json()
   if (!rej.ok) {

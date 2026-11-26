@@ -6,14 +6,19 @@ import { MedusaError } from "@medusajs/framework/utils"
 import { rejectStoreReturn } from "../../../../../lib/return-rejection"
 
 type RejectBody = {
-  reason?: string | null
+  stage?: unknown
+  reason_code?: unknown
+  note?: unknown
+  photos?: unknown
 }
 
 /**
  * Admin: POST /admin/returns/:id/reject
+ * Body: { stage: "before_arrival" | "inspected", reason_code, note?, photos?: [{ url }] }
  *
- * Ürün geldi ama kabul edilmedi → refund yok, stok yok (cancel receive öncesi),
- * müşteriye escay.return_rejected maili.
+ * Paket gelmeden ret → kargo iade kodu iptal, müşteriye "göndermeyin" maili.
+ * İnceleme sonrası ret → sebep + fotoğraf zorunlu, ürün müşteriye geri gönderilmek üzere
+ * kayda geçer. İkisinde de refund yok, stok yok; müşteriye escay.return_rejected maili.
  */
 export const POST = async (
   req: AuthenticatedMedusaRequest,
@@ -27,7 +32,10 @@ export const POST = async (
   const body = (req.validatedBody || req.body || {}) as RejectBody
   const result = await rejectStoreReturn(req.scope, {
     return_id: returnId,
-    reason: body.reason,
+    stage: body.stage,
+    reason_code: body.reason_code,
+    note: body.note,
+    photos: body.photos,
     rejected_by: req.auth_context?.actor_id || null,
   })
 

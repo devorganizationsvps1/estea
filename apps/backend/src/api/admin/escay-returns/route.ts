@@ -8,6 +8,7 @@ import {
   classifyReturn,
   type AdminReturnState,
 } from "../../../lib/return-admin-list"
+import { readSendBack } from "../../../lib/return-rejection-plan"
 
 type ReturnRow = {
   id: string
@@ -124,6 +125,8 @@ export const GET = async (req: AuthenticatedMedusaRequest, res: MedusaResponse) 
       exchange: Boolean(
         meta.escay_exchange && (meta.escay_exchange as { status?: string }).status !== "canceled"
       ),
+      // Kabul edilmeyen ürünün geri gönderimi (awaiting / returned: yapılacak iş var)
+      send_back: readSendBack(meta)?.status ?? null,
       refund_amount: refund?.amount ?? null,
       refund_error: refund?.error ?? null,
       manual_required: refund?.manual_required === true,

@@ -792,7 +792,7 @@ export default async function smokeFullFlow({ container }: ExecArgs) {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ reason: "smoke-full: reject guard" }),
+    body: JSON.stringify({ stage: "before_arrival", reason_code: "other", note: "smoke-full: reject guard" }),
   })
   if (!rejRes.ok) {
     throw new Error(`reject failed ${rejRes.status}: ${await rejRes.text()}`)

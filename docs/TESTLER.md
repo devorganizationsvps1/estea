@@ -48,6 +48,7 @@ Dış servislerin hiçbiri çağrılmaz:
 - Hasarlı ürün stoğa girmez.
 - Talep edilenden fazla adet kabul edilemez.
 - Reddedilen iadeye geri ödeme yapılmaz.
+- İncelenip reddedilen ürün fotoğrafsız reddedilemez; geri gönderim → bize döndü → 14 gün dolunca kapanır → yeniden gönderilebilir. Paket gelmeden rette geri gönderim açılmaz; imha yalnız müşteri onayı notuyla (K17).
 - PayTR iadeyi reddederse admin'e gerçek hata mesajı gelir.
 
 **Güvenlik (`access-control`)**

@@ -4,14 +4,16 @@ import { acceptReturnItems, type AcceptanceInput } from "../../../../../lib/retu
 
 /**
  * POST /admin/returns/:id/accept — ürün bazlı teslim alma.
- * Body: { items: [{ item_id, restock_quantity, damaged_quantity }], reason?, refund_shipping? }
- * Kabul edilenler için para iadesi otomatik (order.return_received); kabul edilmeyenler iade almaz.
+ * Body: { items: [{ item_id, restock_quantity, damaged_quantity }], reason?, refund_shipping?, photos? }
+ * Kabul edilenler için para iadesi otomatik (order.return_received); kabul edilmeyenler iade almaz:
+ * onlar için sebep + fotoğraf zorunlu, ürün müşteriye geri gönderilir (send-back).
  */
 export async function POST(req: AuthenticatedMedusaRequest, res: MedusaResponse) {
   const body = (req.body || {}) as {
     items?: AcceptanceInput[]
     reason?: string | null
     refund_shipping?: boolean
+    photos?: unknown
   }
   try {
     const result = await acceptReturnItems(req.scope, {
@@ -19,6 +21,7 @@ export async function POST(req: AuthenticatedMedusaRequest, res: MedusaResponse)
       items: Array.isArray(body.items) ? body.items : [],
       reason: body.reason,
       refund_shipping: body.refund_shipping === true,
+      photos: body.photos,
       actor_id: req.auth_context?.actor_id || null,
     })
     res.json({ ok: true, ...result })

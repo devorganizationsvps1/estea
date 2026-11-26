@@ -40,7 +40,8 @@ function hideDuplicateCards() {
 /**
  * Medusa'nın "Gönderi #1" kartındaki "Gönderildi / Teslim edildi olarak işaretle" düğmeleri
  * Es Çay'ın onayından geçmez (müşteriye mail gider, teslimde fatura kesilir). Aynı iş
- * Sipariş durumu kartında, onayla yapılır.
+ * Sipariş durumu kartında, onayla yapılır. Karttaki "…" menüsünün tek işi yerel "İptal"dir;
+ * o uç sunucuda kapalı (_native-block), menü de gizlenir.
  */
 const NATIVE_MARK = /(olarak işaretle|^Mark as (shipped|delivered))/i
 
@@ -49,6 +50,9 @@ function hideNativeFulfillmentActions() {
     if (!/^(Gönderi|Fulfillment) #/.test(h.textContent?.trim() || "")) continue
     const card = h.closest<HTMLElement>(".shadow-elevation-card-rest")
     if (!card) continue
+    for (const menu of (h.parentElement || card).querySelectorAll<HTMLButtonElement>('button[aria-haspopup="menu"]')) {
+      menu.style.display = "none"
+    }
     for (const btn of card.querySelectorAll<HTMLButtonElement>("button")) {
       if (!NATIVE_MARK.test(btn.textContent?.trim() || "")) continue
       btn.style.display = "none"

@@ -26,6 +26,7 @@ type AdminReturn = {
   return_code: string | null
   return_code_sent?: boolean
   exchange?: boolean
+  send_back?: "awaiting" | "shipped" | "delivered" | "returned" | "closed" | "disposed" | null
   refund_amount: number | null
   refund_error: string | null
   manual_required: boolean
@@ -96,6 +97,11 @@ const ReturnsPage = () => {
                     </Badge>
                     {r.exchange ? (
                       <Badge size="2xsmall" color="blue" className="ml-1">Değişim</Badge>
+                    ) : null}
+                    {r.send_back === "awaiting" ? (
+                      <Badge size="2xsmall" color="orange" className="ml-1">Ürün geri gönderilecek</Badge>
+                    ) : r.send_back === "returned" ? (
+                      <Badge size="2xsmall" color="red" className="ml-1">Geri gönderim bize döndü</Badge>
                     ) : null}
                     {r.state === "refunded" && r.refund_amount != null ? (
                       <div className="txt-compact-small text-ui-fg-subtle">{formatTL(r.refund_amount)}</div>

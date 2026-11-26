@@ -58,3 +58,6 @@ Es Çay doğrudan DHL (K1), Geliver maddeleri DHL karşılığıyla değerlendir
 | `GIT_COMMIT` her deploy'da | ⏳ | Dokploy build argümanı |
 | Diğer eski WP sayfaları (Fabrikamız, Basında Biz, İletişim) ve kayıp 5 yazı | ⏳ | Eski adresler bilinmiyor |
 | Tam tur testi (gerçek kart, 2 ürün × 2 adet, iade) | 🔧 | Canlıya geçişte |
+| Reddedilen ürünün geri gönderimi (K17) gerçek DHL'de | ⏳ | Kod ve testler tamam (2026-11-25); DHL sandbox'ta bir geri gönderim açılıp etiketi basılmalı, "bize döndü" durumu canlıda görülmeli |
+| İade politikası metninde geri gönderim / imha / 14 gün | 🔧 | `iade-ve-geri-odeme-politikasi` sayfası ve sözleşme metni; hukuk teyidi (K17) |
+| Ret fotoğrafları kalıcı depoda mı | 🔧 | S3 boşken yüklemeler container diskinde; itirazda kanıt olacak fotoğraflar deploy'da silinir (S3 maddesi) |

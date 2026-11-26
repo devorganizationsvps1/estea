@@ -15,6 +15,7 @@ import {
 } from "./helpers/fulfill-order"
 import { rejectStoreReturn } from "../../src/lib/return-rejection"
 import { acceptReturnItems } from "../../src/lib/return-acceptance"
+import { closeExpiredSendBacks, disposeSendBack, markSendBackReturned, shipSendBack } from "../../src/lib/return-send-back"
 import { processReturnRefund, paidPricePerUnit } from "../../src/lib/return-refund"
 import { previewReturnRefund } from "../../src/lib/return-refund-preview"
 import { createPromotionsWorkflow } from "@medusajs/medusa/core-flows"
@@ -301,11 +302,73 @@ medusaIntegrationTestRunner({
         expect(statusOf(first)).toEqual(200)
         const returnId = (first as { data: { return: { id: string } } }).data.return.id
 
-        await rejectStoreReturn(getContainer(), { return_id: returnId, reason: "test" })
+        await rejectStoreReturn(getContainer(), { return_id: returnId, stage: "before_arrival", reason_code: "other", note: "test" })
 
         const again = await postGuestReturn(order.id, email, itemId)
         expect(statusOf(again)).toBeGreaterThanOrEqual(400)
         expect(statusOf(again)).toBeLessThan(500)
+      })
+
+      it("incelenip reddedilen ürün: fotoğraf zorunlu, geri gönderim → bize döndü → 14 gün → yeniden gönder", async () => {
+        const { order, email, itemId } = await shippedGuestOrder("sendback")
+        const first = await postGuestReturn(order.id, email, itemId)
+        const returnId = (first as { data: { return: { id: string } } }).data.return.id
+        const container = getContainer()
+        const query = container.resolve(ContainerRegistrationKeys.QUERY)
+        const load = async () => {
+          const { data } = await query.graph({ entity: "return", fields: ["id", "status", "metadata"], filters: { id: returnId } })
+          return data[0] as { status: string; metadata: Record<string, unknown> }
+        }
+        const photo = { url: "https://cdn.escay.test/inceleme-1.jpg" }
+
+        await expect(rejectStoreReturn(container, { return_id: returnId, stage: "inspected", reason_code: "opened" })).rejects.toThrow(/fotoğraf/)
+        expect((await load()).status).toEqual("requested")
+
+        await rejectStoreReturn(container, { return_id: returnId, stage: "inspected", reason_code: "opened", note: "bant yırtık", photos: [photo] })
+        let ret = await load()
+        expect(ret.status).toEqual("canceled")
+        expect(ret.metadata.escay_rejection).toMatchObject({ rejected: true, stage: "inspected", reason_code: "opened", photos: [photo] })
+        expect(ret.metadata.paytr_refund).toMatchObject({ status: "skipped" })
+        expect(ret.metadata.escay_send_back).toMatchObject({ status: "awaiting", source: "rejection", items: [{ item_id: itemId, quantity: 1 }] })
+
+        // Testte kargo firması bağlı değil: takip numarası elle girilir.
+        await expect(shipSendBack(container, { returnId })).rejects.toThrow(/takip numarasını/)
+        const shipped = await shipSendBack(container, { returnId, manual: { trackingNumber: "TR123", carrierName: "PTT" } })
+        expect(shipped).toMatchObject({ status: "shipped", shipment: { carrier: "manual", tracking_number: "TR123" } })
+        await expect(disposeSendBack(container, { returnId, consentNote: "onay verdi 25.11" })).rejects.toThrow(/elimizde değil/)
+
+        const back = await markSendBackReturned(container, { returnId })
+        expect(back.status).toEqual("returned")
+        expect(await closeExpiredSendBacks(container)).toEqual(0)
+        expect(await closeExpiredSendBacks(container, new Date(Date.now() + 15 * 86_400_000))).toEqual(1)
+        ret = await load()
+        expect(ret.metadata.escay_send_back).toMatchObject({ status: "closed" })
+        // Ret kaydı ve para iadesi kilidi yerinde.
+        expect(ret.metadata.escay_rejection).toMatchObject({ rejected: true })
+        expect(ret.metadata.paytr_refund).toMatchObject({ status: "skipped" })
+
+        const again = await shipSendBack(container, { returnId, manual: { trackingNumber: "TR456" } })
+        expect(again).toMatchObject({ status: "shipped", hold_until: null })
+      })
+
+      it("paket gelmeden red: geri gönderim açılmaz; onaylı imha yalnız incelenen üründe", async () => {
+        const a = await shippedGuestOrder("before")
+        const ra = ((await postGuestReturn(a.order.id, a.email, a.itemId)) as { data: { return: { id: string } } }).data.return.id
+        const container = getContainer()
+        const query = container.resolve(ContainerRegistrationKeys.QUERY)
+        const res = await rejectStoreReturn(container, { return_id: ra, stage: "before_arrival", reason_code: "period_expired" })
+        expect(res.return_code).toEqual({ state: "none", code: null })
+        const { data } = await query.graph({ entity: "return", fields: ["id", "status", "metadata"], filters: { id: ra } })
+        expect(data[0].status).toEqual("canceled")
+        expect((data[0].metadata as Record<string, unknown>).escay_send_back).toBeUndefined()
+        await expect(shipSendBack(container, { returnId: ra, manual: { trackingNumber: "X1" } })).rejects.toThrow(/geri gönderilecek ürün yok/)
+
+        const b = await shippedGuestOrder("dispose")
+        const rb = ((await postGuestReturn(b.order.id, b.email, b.itemId)) as { data: { return: { id: string } } }).data.return.id
+        await rejectStoreReturn(container, { return_id: rb, stage: "inspected", reason_code: "damaged", photos: [{ url: "https://cdn.escay.test/x.jpg" }] })
+        await expect(disposeSendBack(container, { returnId: rb, consentNote: "" })).rejects.toThrow(/yazılı onayını/)
+        const disposed = await disposeSendBack(container, { returnId: rb, consentNote: "25.11.2026 e-postayla onayladı" })
+        expect(disposed).toMatchObject({ status: "disposed", disposal: { consent_note: "25.11.2026 e-postayla onayladı" } })
       })
 
       it("double submit at once → only one return created", async () => {

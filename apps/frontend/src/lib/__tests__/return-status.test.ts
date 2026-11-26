@@ -30,6 +30,46 @@ describe("resolveReturnStatus", () => {
     expect(st?.note).toBe("Açıklama: Ürün açılmış")
   })
 
+  it("paket gelmeden red: göndermemesi söylenir, iade kodu gösterilmez", () => {
+    const st = resolveReturnStatus({
+      status: "canceled",
+      metadata: {
+        return_code: "ESC65IABC123",
+        escay_rejection: { rejected: true, stage: "before_arrival", reason: "İade süresi dolmuş" },
+      },
+    })
+    expect(st?.note).toBe("Açıklama: İade süresi dolmuş. Lütfen paketi kargoya verme; iade kodun artık geçerli değil.")
+    expect(st?.returnCode).toBeNull()
+  })
+
+  it("incelenip reddedilen ürünün geri gönderimi adım adım görünür", () => {
+    const rejected = (send_back: Record<string, unknown>) =>
+      resolveReturnStatus({
+        status: "canceled",
+        metadata: { escay_rejection: { rejected: true, stage: "inspected", reason: "Ambalajı açılmış" }, escay_send_back: send_back },
+      })?.note
+    expect(rejected({ status: "awaiting" })).toContain("ücretsiz olarak adresine geri göndereceğiz")
+    expect(rejected({ status: "shipped", shipment: { carrier_name: "DHL eCommerce", tracking_number: "123456" } })).toContain(
+      "DHL eCommerce takip no: 123456"
+    )
+    expect(rejected({ status: "returned", hold_until: "2026-12-09T09:00:00.000Z" })).toContain("9 Aralık tarihine kadar")
+    expect(rejected({ status: "closed" })).toContain("bekleme süresi doldu")
+    expect(rejected({ status: "disposed" })).toContain("onayınla imha edildi")
+  })
+
+  it("kısmi kabulde kabul edilmeyen ürünün geri gönderimi de söylenir", () => {
+    const st = resolveReturnStatus({
+      status: "partially_received",
+      metadata: {
+        escay_acceptance: { items: [{ rejected: 1 }] },
+        paytr_refund: { status: "success", amount: 100 },
+        escay_send_back: { status: "shipped", shipment: { tracking_number: "777" } },
+      },
+    })
+    expect(st?.label).toBe("Para iade edildi")
+    expect(st?.note).toContain("Takip no: 777")
+  })
+
   it("değişim, iade gibi görünmez", () => {
     const exchange = (status: string) => ({ escay_exchange: { status, items: [] } })
     expect(resolveReturnStatus({ status: "requested", metadata: exchange("requested") })?.label).toBe(

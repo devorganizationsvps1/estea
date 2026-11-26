@@ -23,6 +23,7 @@
     "test:unit": "npm run test:unit --prefix apps/backend && npm test --prefix apps/frontend",
     "test:integration": "npm run test:integration:http --prefix apps/backend",
     "test:all": "npm run typecheck && npm run test:unit && npm run test:integration",
+    "gate": "npm run test:all && npm run test:returns --prefix apps/backend && npm run build:backend && echo 'KAPI: YESIL'",
     "test:e2e": "npm run test:e2e --prefix apps/frontend"
   },
   "devDependencies": {

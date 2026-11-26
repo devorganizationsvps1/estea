@@ -45,6 +45,7 @@ export default async function returnRefundedEmailHandler({
       shippingIncluded: Boolean(data.shipping_included),
       notAccepted: ctx.notAccepted,
       notAcceptedReason: ctx.notAcceptedReason,
+      notAcceptedPhotos: ctx.notAcceptedPhotos,
     })
 
     const notificationService = container.resolve(Modules.NOTIFICATION)

@@ -17,6 +17,27 @@ import type {
 export const NATIVE_BLOCKED: { matcher: RegExp; methods: ("POST" | "DELETE")[]; use: string }[] = [
   { matcher: /^\/admin\/payments\/[^/]+\/refund\/?$/, methods: ["POST"], use: "İade kutusu (/admin/returns/:id/refund)" },
   { matcher: /^\/admin\/orders\/[^/]+\/cancel\/?$/, methods: ["POST"], use: "Siparişi iptal et (escay-cancel)" },
+  // Sağlayıcı iptali firmanın reddini yutar (DHL'de gönderi açık kalır, yeniden açınca
+  // ikinci kayıt oluşur). Kod yolu cancelOpenFulfillmentStrict: firma reddederse durur.
+  {
+    matcher: /^\/admin\/orders\/[^/]+\/fulfillments\/[^/]+\/cancel\/?$/,
+    methods: ["POST"],
+    use: "Gönderiyi yeniden aç / Siparişi iptal et",
+  },
+  // Yerel gönderi oluşturma / kargoya verme / teslim işaretleme: sipariş kilidini, kargo
+  // firması kaydını, müşteri mailini ve teslimde kesilen faturayı atlar. Kod bu adımları
+  // workflow ile çalıştırır (auto-fulfill-order, carrier-actions); HTTP uçları kullanılmaz.
+  {
+    matcher: /^\/admin\/orders\/[^/]+\/fulfillments\/?$/,
+    methods: ["POST"],
+    use: "Sipariş durumu kartı (Gönderi aç)",
+  },
+  {
+    matcher: /^\/admin\/orders\/[^/]+\/fulfillments\/[^/]+\/(shipments|mark-as-delivered)\/?$/,
+    methods: ["POST"],
+    use: "Sipariş durumu kartı",
+  },
+  { matcher: /^\/admin\/fulfillments(\/.*)?$/, methods: ["POST"], use: "Sipariş durumu kartı" },
   { matcher: /^\/admin\/returns\/?$/, methods: ["POST"], use: "Müşteri iade talebi / iade kutusu" },
   {
     matcher:

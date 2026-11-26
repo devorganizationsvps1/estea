@@ -5,6 +5,7 @@ import {
 import { ContainerRegistrationKeys } from "@medusajs/framework/utils"
 import { classifyReturn } from "../../../lib/return-admin-list"
 import { listAdminExchanges } from "../../../lib/exchange-admin-list"
+import { sendBackNeedsAction } from "../../../lib/return-rejection-plan"
 
 /** Değişimler sayfasındaki "Açık" sekmesiyle aynı durumlar. */
 const OPEN_EXCHANGE_STATES = new Set(["awaiting_return", "to_ship", "failed", "label_ready"])
@@ -21,7 +22,7 @@ const RECENT = 300
 
 /**
  * Admin: GET /admin/escay-nav-counts — kenar çubuğu rozetleri.
- * returns: bekleyen + sorunlu iade; exchanges: açık değişim; orders: kargolanacak (ödenmiş, etiket basılmamış,
+ * returns: bekleyen + sorunlu iade + geri gönderilmeyi bekleyen reddedilmiş ürün; exchanges: açık değişim; orders: kargolanacak (ödenmiş, etiket basılmamış,
  * kargoya verilmemiş) + havale bekleyen.
  */
 export const GET = async (req: AuthenticatedMedusaRequest, res: MedusaResponse) => {
@@ -33,8 +34,11 @@ export const GET = async (req: AuthenticatedMedusaRequest, res: MedusaResponse) 
     pagination: { take: RECENT, order: { created_at: "DESC" } },
   })
   const returnCount = (returns as { status?: string | null; metadata?: Record<string, unknown> | null }[])
-    .map(classifyReturn)
-    .filter((s) => s === "open" || s === "problem").length
+    .filter((r) => {
+      const s = classifyReturn(r)
+      // Kabul edilmeyen ürün müşteriye geri gönderilmeyi bekliyorsa o da yapılacak iştir.
+      return s === "open" || s === "problem" || sendBackNeedsAction(r.metadata)
+    }).length
 
   const { data: orders } = await query.graph({
     entity: "order",

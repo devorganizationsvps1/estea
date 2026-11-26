@@ -580,9 +580,11 @@ export function parseShipmentStatus(json: unknown): DhlStatus {
 
   let action: FulfillmentAction = CODE_TO_ACTION[code] ?? "none"
   if (!CODE_TO_ACTION[code] && description) action = TEXT_TO_ACTION.find(([re]) => re.test(description))?.[1] ?? "none"
-  // Bayraklar kodu ezer: teslim bilgisi kesin; geri gönderi no iade demektir.
-  if (Number(data.isDelivered) === 1 && action !== "returned") action = "delivered"
-  if (returnShipmentId && action !== "delivered") action = "returned"
+  // Bayraklar kodu ezer. Geri gönderi no varsa paket göndericiye dönüyor/dönmüştür: DHL
+  // "teslim edildi" dese de (iade bize teslim) müşteriye teslim sayılmaz — yoksa "Teslim
+  // edildi" maili gider ve fatura kesilir.
+  if (Number(data.isDelivered) === 1) action = "delivered"
+  if (returnShipmentId) action = "returned"
 
   return {
     code,

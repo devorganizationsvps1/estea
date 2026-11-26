@@ -2,6 +2,7 @@ import { MedusaContainer } from "@medusajs/framework/types"
 import { ContainerRegistrationKeys } from "@medusajs/framework/utils"
 import { formatOrderNumber } from "@escay/shared/order-number"
 import type { ReturnEmailLine } from "../emails/return-notifications"
+import { normalizePhotos } from "./return-rejection-plan"
 
 function asNumber(value: unknown): number {
   if (typeof value === "number") return Number.isFinite(value) ? value : 0
@@ -25,6 +26,9 @@ export type ReturnEmailContext = {
   /** Ürün bazlı kabulde kabul edilmeyen kalemler (metadata.escay_acceptance) */
   notAccepted: ReturnEmailLine[]
   notAcceptedReason: string | null
+  notAcceptedPhotos: { url: string }[]
+  /** Ham iade metadata'sı (ret aşaması, geri gönderim) */
+  metadata: Record<string, unknown>
 }
 
 /** Return + order + reason etiketleri — mail şablonları için. */
@@ -161,7 +165,7 @@ export async function loadReturnEmailContext(
     typeof meta.source === "string" ? meta.source : null
 
   const acceptance = meta.escay_acceptance as
-    | { reason?: string | null; items?: { item_id: string; rejected?: number }[] }
+    | { reason?: string | null; photos?: unknown; items?: { item_id: string; rejected?: number }[] }
     | null
     | undefined
   const notAccepted: ReturnEmailLine[] = (acceptance?.items || [])
@@ -197,5 +201,7 @@ export async function loadReturnEmailContext(
     items,
     notAccepted,
     notAcceptedReason: notAccepted.length ? acceptance?.reason?.trim() || null : null,
+    notAcceptedPhotos: notAccepted.length ? normalizePhotos(acceptance?.photos) : [],
+    metadata: meta,
   }
 }

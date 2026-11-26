@@ -57,6 +57,8 @@ export type ReturnRefundedCustomerData = {
   /** Ürün bazlı kabulde kabul edilmeyen ürünler — para iadesine dahil değil */
   notAccepted?: ReturnEmailLine[]
   notAcceptedReason?: string | null
+  /** Kabul edilmeyen ürünlerin inceleme fotoğrafları */
+  notAcceptedPhotos?: { url: string }[]
 }
 
 export type ReturnRejectedCustomerData = {
@@ -65,6 +67,27 @@ export type ReturnRejectedCustomerData = {
   email: string
   reason?: string | null
   items: ReturnEmailLine[]
+  /**
+   * "before_arrival": paket gelmeden ret (göndermeyin, kod iptal).
+   * "inspected": ürün incelendi, müşteriye geri gönderilecek. Boş: eski kayıt.
+   */
+  stage?: "before_arrival" | "inspected" | null
+  /** İnceleme fotoğrafları (ret kanıtı) */
+  photos?: { url: string }[]
+}
+
+export type SendBackEmailKind = "shipped" | "returned" | "closed" | "disposed"
+
+export type SendBackCustomerData = {
+  kind: SendBackEmailKind
+  orderDisplayId: string
+  items: ReturnEmailLine[]
+  carrierName?: string | null
+  trackingNumber?: string | null
+  trackingUrl?: string | null
+  /** "returned": bu tarihe kadar bekletilir (ISO) */
+  holdUntil?: string | null
+  holdDays?: number
 }
 
 function itemRowsHtml(items: ReturnEmailLine[]): string {
@@ -525,6 +548,7 @@ export function buildReturnRefundedCustomerEmail(
     shippingIncluded,
   } = data
   const notAccepted = data.notAccepted || []
+  const notAcceptedPhotos = (data.notAcceptedPhotos || []).filter((p) => /^https?:\/\//i.test(p.url))
   const subject = `İadeniz Onaylandı — #${orderDisplayId}`
   const money = formatMoney(amount, currencyCode)
 
@@ -555,7 +579,21 @@ export function buildReturnRefundedCustomerEmail(
       Bu ürünler için para iadesi yapılmamıştır.${
         data.notAcceptedReason ? ` Sebep: ${escapeHtml(data.notAcceptedReason)}` : ""
       }
+      Ürünleri, kargo ücreti bize ait olmak üzere teslimat adresinize geri göndereceğiz. Geri
+      gönderilmesini istemiyorsanız ${escapeHtml(COMPANY.emailOps)} adresine yazın; yazılı onayınızla imha ederiz.
+    </p>${
+      notAcceptedPhotos.length
+        ? `
+    <p style="margin:0 0 24px;">
+      ${notAcceptedPhotos
+        .map(
+          (p, i) =>
+            `<a href="${escapeHtml(p.url)}" style="display:inline-block;margin:0 8px 8px 0;"><img src="${escapeHtml(p.url)}" alt="İnceleme fotoğrafı ${i + 1}" width="160" style="width:160px;max-width:100%;height:auto;border-radius:6px;border:1px solid ${EMAIL_STYLES.borderColor};"></a>`
+        )
+        .join("")}
     </p>`
+        : ""
+    }`
         : ""
     }
 
@@ -579,6 +617,8 @@ ${
   notAccepted.length
     ? `\nİadesi kabul edilmeyen ürünler (para iadesi yapılmadı):\n${itemRowsText(notAccepted)}${
         data.notAcceptedReason ? `\nSebep: ${data.notAcceptedReason}` : ""
+      }\nBu ürünleri kargo ücreti bize ait olmak üzere adresinize geri göndereceğiz; istemiyorsanız ${COMPANY.emailOps} adresine yazın, onayınızla imha ederiz.${
+        notAcceptedPhotos.length ? `\nİnceleme fotoğrafları:\n${notAcceptedPhotos.map((p) => p.url).join("\n")}` : ""
       }\n`
     : ""
 }
@@ -596,13 +636,25 @@ export function buildReturnRejectedCustomerEmail(
   data: ReturnRejectedCustomerData
 ): { subject: string; html: string; text: string } {
   const { returnId, orderDisplayId, reason, items } = data
+  const stage = data.stage || null
+  const photos = (data.photos || []).filter((p) => /^https?:\/\//i.test(p.url))
   const subject = `İade Talebiniz Değerlendirildi — #${orderDisplayId}`
+
+  const intro =
+    stage === "before_arrival"
+      ? "İade talebiniz incelendi. Maalesef bu talep kabul edilememiştir; ödeme iadesi yapılmayacaktır."
+      : "Gönderdiğiniz ürün incelendi. Maalesef bu iade talebi kabul edilememiştir; ödeme iadesi yapılmayacaktır."
+  const next =
+    stage === "before_arrival"
+      ? `Lütfen ürünü kargoya vermeyin. Size daha önce iletilen iade kodu artık geçerli değildir.`
+      : stage === "inspected"
+        ? `Ürününüzü, kargo ücreti bize ait olmak üzere teslimat adresinize geri göndereceğiz. Kargoya verildiğinde takip numarasını e-postayla ileteceğiz. Ürünün geri gönderilmesini istemiyorsanız ${COMPANY.emailOps} adresine yazın; yazılı onayınızla ürünü imha ederiz.`
+        : `Ürününüzün iadesi veya yeniden gönderimi hakkında bilgi için ${COMPANY.emailOps} adresine yazabilirsiniz.`
 
   const html = emailLayout(`
     <h1 style="margin:0 0 8px;font-size:22px;color:${EMAIL_STYLES.brandColor};">İade talebiniz değerlendirildi</h1>
     <p style="margin:0 0 24px;font-size:15px;color:${EMAIL_STYLES.mutedColor};line-height:24px;">
-      Gönderdiğiniz ürün incelendi. Maalesef bu iade talebi
-      <strong>kabul edilememiştir</strong>; ödeme iadesi yapılmayacaktır.
+      ${escapeHtml(intro)}
     </p>
 
     <p style="margin:0 0 24px;padding:16px;background:${EMAIL_STYLES.bgColor};border-radius:6px;font-size:15px;line-height:22px;">
@@ -610,7 +662,7 @@ export function buildReturnRejectedCustomerEmail(
       <strong>Sipariş No:</strong> #${escapeHtml(orderDisplayId)}
       ${
         reason
-          ? `<br><strong>Açıklama:</strong> ${escapeHtml(reason)}`
+          ? `<br><strong>Sebep:</strong> ${escapeHtml(reason)}`
           : ""
       }
     </p>
@@ -628,9 +680,22 @@ export function buildReturnRejectedCustomerEmail(
         : ""
     }
 
+    ${
+      photos.length
+        ? `<h2 style="margin:0 0 12px;font-size:16px;color:${EMAIL_STYLES.brandColor};">İnceleme fotoğrafları</h2>
+    <p style="margin:0 0 24px;">
+      ${photos
+        .map(
+          (p, i) =>
+            `<a href="${escapeHtml(p.url)}" style="display:inline-block;margin:0 8px 8px 0;"><img src="${escapeHtml(p.url)}" alt="İnceleme fotoğrafı ${i + 1}" width="160" style="width:160px;max-width:100%;height:auto;border-radius:6px;border:1px solid ${EMAIL_STYLES.borderColor};"></a>`
+        )
+        .join("")}
+    </p>`
+        : ""
+    }
+
     <p style="margin:0 0 16px;font-size:14px;line-height:22px;color:${EMAIL_STYLES.mutedColor};">
-      Ürününüzün iadesi veya yeniden gönderimi hakkında bilgi için
-      ${escapeHtml(COMPANY.emailOps)} adresine yazabilirsiniz.
+      ${escapeHtml(next)}
     </p>
 
     <p style="margin:0;font-size:13px;color:${EMAIL_STYLES.mutedColor};line-height:20px;">
@@ -640,14 +705,107 @@ export function buildReturnRejectedCustomerEmail(
 
   const text = `İade Talebiniz Değerlendirildi — #${orderDisplayId}
 
+${intro}
+
 İade No: ${returnId}
 Sipariş No: #${orderDisplayId}
-Durum: Reddedildi (ödeme iadesi yapılmayacak)
-${reason ? `Açıklama: ${reason}\n` : ""}
-${items.length ? `Ürünler:\n${itemRowsText(items)}\n` : ""}
-Ürününüzün iadesi veya yeniden gönderimi için: ${COMPANY.emailOps}
+${reason ? `Sebep: ${reason}\n` : ""}
+${items.length ? `Ürünler:\n${itemRowsText(items)}\n` : ""}${
+    photos.length ? `\nİnceleme fotoğrafları:\n${photos.map((p) => p.url).join("\n")}\n` : ""
+  }
+${next}
+
+Sorularınız için: ${COMPANY.emailOps}
 
 — Es Çay`
 
   return { subject, html, text }
+}
+
+function longDateTr(iso: string | null | undefined): string {
+  const t = iso ? Date.parse(iso) : NaN
+  if (!Number.isFinite(t)) return ""
+  return new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Istanbul" }).format(new Date(t))
+}
+
+/**
+ * 5) Müşteriye — reddedilen ürünün geri gönderimi: kargoya verildi / teslim alınmadı, bize
+ * döndü (bekleme süresi) / bekleme süresi doldu / onayla imha edildi.
+ */
+export function buildSendBackCustomerEmail(data: SendBackCustomerData): { subject: string; html: string; text: string } {
+  const { kind, orderDisplayId, items } = data
+  const carrier = data.carrierName?.trim() || "kargo firması"
+  const until = longDateTr(data.holdUntil)
+  const days = data.holdDays ?? 14
+
+  const copy: Record<SendBackEmailKind, { subject: string; title: string; body: string }> = {
+    shipped: {
+      subject: `Ürününüz Size Geri Gönderildi — #${orderDisplayId}`,
+      title: "Ürününüz size geri gönderildi",
+      body: `İadesi kabul edilmeyen ürününüz ${carrier} ile teslimat adresinize gönderilmek üzere hazırlandı. Kargo ücreti bize aittir.`,
+    },
+    returned: {
+      subject: `Paketiniz Teslim Edilemedi — #${orderDisplayId}`,
+      title: "Paketiniz teslim edilemedi",
+      body: `Size geri gönderdiğimiz ürün teslim alınmadığı için depomuza döndü. Ürünü ${days} gün boyunca${until ? ` (${until} tarihine kadar)` : ""} sizin için saklıyoruz. Bu süre içinde ${COMPANY.emailOps} adresine yazarsanız yeniden göndeririz ya da onayınızla imha ederiz.`,
+    },
+    closed: {
+      subject: `Geri Gönderim Kaydınız Kapatıldı — #${orderDisplayId}`,
+      title: "Geri gönderim kaydınız kapatıldı",
+      body: `Teslim alınmayıp depomuza dönen ürününüz için ${days} günlük bekleme süresi doldu ve geri gönderim kaydı kapatıldı. Ürününüzle ilgili talebiniz için ${COMPANY.emailOps} adresine yazabilirsiniz.`,
+    },
+    disposed: {
+      subject: `Ürününüz İmha Edildi — #${orderDisplayId}`,
+      title: "Ürününüz onayınızla imha edildi",
+      body: "İadesi kabul edilmeyen ürününüz, verdiğiniz onay doğrultusunda imha edilmiştir. Bu ürün için ödeme iadesi yapılmamıştır.",
+    },
+  }
+  const c = copy[kind]
+  const tracking = kind === "shipped" && data.trackingNumber ? data.trackingNumber : ""
+
+  const html = emailLayout(`
+    <h1 style="margin:0 0 8px;font-size:22px;color:${EMAIL_STYLES.brandColor};">${escapeHtml(c.title)}</h1>
+    <p style="margin:0 0 24px;font-size:15px;color:${EMAIL_STYLES.mutedColor};line-height:24px;">
+      ${escapeHtml(c.body)}
+    </p>
+
+    <p style="margin:0 0 24px;padding:16px;background:${EMAIL_STYLES.bgColor};border-radius:6px;font-size:15px;line-height:22px;">
+      <strong>Sipariş No:</strong> #${escapeHtml(orderDisplayId)}
+      ${
+        tracking
+          ? `<br><strong>Kargo:</strong> ${escapeHtml(carrier)}<br><strong>Takip No:</strong> ${
+              data.trackingUrl
+                ? `<a href="${escapeHtml(data.trackingUrl)}" style="color:${EMAIL_STYLES.brandColor};">${escapeHtml(tracking)}</a>`
+                : escapeHtml(tracking)
+            }`
+          : ""
+      }
+    </p>
+
+    ${
+      items.length
+        ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+      ${itemRowsHtml(items)}
+    </table>`
+        : ""
+    }
+
+    <p style="margin:0;font-size:13px;color:${EMAIL_STYLES.mutedColor};line-height:20px;">
+      Sorularınız için ${escapeHtml(COMPANY.emailOps)}.
+    </p>
+  `)
+
+  const text = `${c.subject}
+
+${c.body}
+
+Sipariş No: #${orderDisplayId}
+${tracking ? `Kargo: ${carrier}\nTakip No: ${tracking}${data.trackingUrl ? `\nTakip: ${data.trackingUrl}` : ""}\n` : ""}${
+    items.length ? `\nÜrünler:\n${itemRowsText(items)}\n` : ""
+  }
+Sorularınız için: ${COMPANY.emailOps}
+
+— Es Çay`
+
+  return { subject: c.subject, html, text }
 }

@@ -249,7 +249,7 @@ medusaIntegrationTestRunner({
 
         const reject = await api.post(
           `/admin/returns/${returnId}/reject`,
-          { reason: "Ürün kullanılmış" },
+          { stage: "before_arrival", reason_code: "other", note: "Ürün kullanılmış" },
           { ...admin, ...noThrow }
         )
         expect(reject.status).toEqual(200)

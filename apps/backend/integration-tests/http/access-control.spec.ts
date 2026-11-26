@@ -18,7 +18,6 @@ jest.setTimeout(180 * 1000)
 
 /** src/api/admin altındaki özel uçlar — yeni uç eklenince buraya da eklenmeli. */
 const ADMIN_ROUTES: [method: "get" | "post" | "delete", path: string][] = [
-  ["get", "/admin/custom"],
   ["get", "/admin/escay-exchanges"],
   ["get", "/admin/escay-labels/exchanges"],
   ["get", "/admin/escay-labels/orders"],
@@ -27,7 +26,6 @@ const ADMIN_ROUTES: [method: "get" | "post" | "delete", path: string][] = [
   ["post", "/admin/escay-shipments/reconcile"],
   ["get", "/admin/ops-events"],
   ["get", "/admin/sales-stats"],
-  ["get", "/admin/tr-geo"],
   ["get", "/admin/orders/order_x/bank-transfer"],
   ["post", "/admin/orders/order_x/bank-transfer/confirm"],
   ["post", "/admin/orders/order_x/parasut-invoice/retry"],
@@ -57,6 +55,9 @@ const ADMIN_ROUTES: [method: "get" | "post" | "delete", path: string][] = [
   ["post", "/admin/returns/ret_x/return-code"],
   ["get", "/admin/returns/ret_x/return-code/renew"],
   ["post", "/admin/returns/ret_x/return-code/renew"],
+  ["get", "/admin/returns/ret_x/send-back"],
+  ["post", "/admin/returns/ret_x/send-back"],
+  ["get", "/admin/returns/ret_x/send-back/label"],
 ]
 
 const CUSTOMER_ROUTES: [method: "get" | "post" | "delete", path: string][] = [
@@ -145,6 +146,13 @@ medusaIntegrationTestRunner({
         const blocked: [string, string][] = [
           ["post", "/admin/payments/pay_x/refund"],
           ["post", "/admin/orders/order_x/cancel"],
+          ["post", "/admin/orders/order_x/fulfillments"],
+          ["post", "/admin/orders/order_x/fulfillments/ful_x/cancel"],
+          ["post", "/admin/orders/order_x/fulfillments/ful_x/shipments"],
+          ["post", "/admin/orders/order_x/fulfillments/ful_x/mark-as-delivered"],
+          ["post", "/admin/fulfillments"],
+          ["post", "/admin/fulfillments/ful_x/cancel"],
+          ["post", "/admin/fulfillments/ful_x/shipment"],
           ["post", "/admin/returns"],
           ["post", "/admin/returns/ret_x"],
           ["post", "/admin/returns/ret_x/cancel"],

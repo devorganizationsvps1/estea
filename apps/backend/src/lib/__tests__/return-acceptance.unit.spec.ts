@@ -82,23 +82,45 @@ describe("acceptReturnItems", () => {
         { item_id: "item_b", damaged_quantity: 1 },
       ],
       reason: " etiketi sökülmüş ",
+      photos: [{ url: "https://cdn.test/a.jpg" }],
       actor_id: "user_1",
     })
     expect(calls).toEqual(["begin", "receive", "dismiss", "confirm"])
     expect(res.partial).toBe(true)
     const meta = updateReturns.mock.calls[0][0][0].data.metadata
     expect(meta.customer_note).toBe("x")
-    expect(meta.escay_acceptance).toMatchObject({ reason: "etiketi sökülmüş", by: "user_1" })
+    expect(meta.escay_acceptance).toMatchObject({ reason: "etiketi sökülmüş", by: "user_1", photos: [{ url: "https://cdn.test/a.jpg" }] })
+    // Kabul edilmeyen 1 adet müşteriye geri gönderilmek üzere kayda geçer.
+    expect(meta.escay_send_back).toMatchObject({ status: "awaiting", source: "partial_acceptance", items: [{ item_id: "item_a", quantity: 1 }] })
+  })
+
+  it("kabul edilmeyen adet varsa sebep ve fotoğraf zorunlu; tam kabulde geri gönderim açılmaz", async () => {
+    const partial = [{ item_id: "item_a", restock_quantity: 1 }, { item_id: "item_b", restock_quantity: 1 }]
+    const a = makeContainer(ret)
+    await expect(acceptReturnItems(a.container, { return_id: "ret_1", items: partial, photos: [{ url: "https://cdn.test/a.jpg" }] })).rejects.toThrow(/sebep/)
+    await expect(acceptReturnItems(a.container, { return_id: "ret_1", items: partial, reason: "açılmış" })).rejects.toThrow(/fotoğraf/)
+    expect(calls).toEqual([])
+
+    const b = makeContainer(ret)
+    await acceptReturnItems(b.container, { return_id: "ret_1", items: [{ item_id: "item_a", restock_quantity: 2 }, { item_id: "item_b", restock_quantity: 1 }] })
+    expect(b.updateReturns.mock.calls[0][0][0].data.metadata.escay_send_back).toBeUndefined()
   })
 
   it("adım hata verirse teslim alma iptal edilir ve kayıt geri alınır", async () => {
     failOn = "confirm"
     const { container, updateReturns } = makeContainer(ret)
     await expect(
-      acceptReturnItems(container, { return_id: "ret_1", items: [{ item_id: "item_a", restock_quantity: 2 }] })
+      acceptReturnItems(container, {
+        return_id: "ret_1",
+        items: [{ item_id: "item_a", restock_quantity: 2 }],
+        reason: "açılmış",
+        photos: [{ url: "https://cdn.test/a.jpg" }],
+      })
     ).rejects.toThrow(/Teslim alınamadı/)
     expect(calls).toEqual(["begin", "receive", "confirm", "cancel"])
     expect(updateReturns.mock.calls[1][0][0].data.metadata.escay_acceptance).toBeNull()
+    // Geri gönderim kaydı da geri alınır: teslim alınmamış ürün için iş açık kalmasın.
+    expect(updateReturns.mock.calls[1][0][0].data.metadata.escay_send_back).toBeNull()
   })
 
   it("bekleyen olmayan iade kabul edilmez", async () => {

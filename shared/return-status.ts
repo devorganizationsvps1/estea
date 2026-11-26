@@ -2,7 +2,7 @@
  * Müşteriye gösterilen iade / değişim durumu — hesap sayfası ve sipariş
  * detayı aynı etiketi kullanır. Kaynak: Medusa return.status + backend'in
  * return.metadata'ya yazdığı bloklar (escay_rejection, escay_exchange,
- * escay_acceptance, paytr_refund, return_code).
+ * escay_acceptance, escay_send_back, paytr_refund, return_code).
  */
 
 export type ReturnStatusTone = "pending" | "progress" | "done" | "rejected" | "canceled"
@@ -53,6 +53,49 @@ function hasUnacceptedItems(meta: Record<string, unknown> | null | undefined): b
   return items.some((it) => Number((it as Block)?.rejected) > 0)
 }
 
+function dateTr(value: unknown): string | null {
+  const t = typeof value === "string" ? Date.parse(value) : NaN
+  if (!Number.isFinite(t)) return null
+  return new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "long", timeZone: "Europe/Istanbul" }).format(new Date(t))
+}
+
+/**
+ * İadesi kabul edilmeyen ürünün akıbeti (metadata.escay_send_back): ürün müşterinin malı,
+ * ücretsiz geri gönderilir; onayıyla imha edilebilir; teslim alınmazsa bir süre bekletilir.
+ */
+export function sendBackNote(meta: Record<string, unknown> | null | undefined): string | null {
+  const sb = block(meta, "escay_send_back")
+  if (!sb) return null
+  const shipment = (sb.shipment && typeof sb.shipment === "object" ? sb.shipment : {}) as Block
+  const tracking = text(shipment.tracking_number)
+  const carrier = text(shipment.carrier_name)
+  switch (sb.status) {
+    case "awaiting":
+      return "Ürünü ücretsiz olarak adresine geri göndereceğiz. İstemiyorsan bize yaz, onayınla imha edelim."
+    case "shipped":
+      return tracking
+        ? `Ürün adresine geri gönderildi. ${carrier ? `${carrier} takip no` : "Takip no"}: ${tracking}.`
+        : "Ürün adresine geri gönderilmek üzere hazırlandı."
+    case "delivered":
+      return "Ürün sana geri teslim edildi."
+    case "returned": {
+      const until = dateTr(sb.hold_until)
+      return `Geri gönderdiğimiz paket teslim alınmadı ve bize döndü. ${until ? `${until} tarihine kadar` : "Bir süre"} saklıyoruz; bize yazarsan yeniden gönderelim.`
+    }
+    case "closed":
+      return "Teslim alınmayan paket için bekleme süresi doldu. Ürünün için bize yazabilirsin."
+    case "disposed":
+      return "Ürün onayınla imha edildi."
+    default:
+      return null
+  }
+}
+
+function joinNotes(...parts: (string | null)[]): string | null {
+  const out = parts.filter(Boolean).join(" ")
+  return out || null
+}
+
 export function resolveReturnStatus(ret: ReturnStatusInput | null | undefined): ResolvedReturnStatus | null {
   if (!ret || (!ret.status && !ret.metadata)) return null
   const meta = ret.metadata || null
@@ -65,16 +108,25 @@ export function resolveReturnStatus(ret: ReturnStatusInput | null | undefined): 
       : "İade kodun e-postayla gelecek. Kod gelmeden paketi kargoya verme."
 
   if (isReturnRejected(meta)) {
-    const reason = text(block(meta, "escay_rejection")?.reason)
+    const rejection = block(meta, "escay_rejection")
+    const reason = text(rejection?.reason)
+    const next =
+      rejection?.stage === "before_arrival"
+        ? "Lütfen paketi kargoya verme; iade kodun artık geçerli değil."
+        : sendBackNote(meta)
     return {
       kind: "return",
       label: "İade kabul edilmedi",
       tone: "rejected",
-      note: reason
-        ? `Açıklama: ${reason}`
-        : "Sorunun varsa müşteri hizmetlerimize yazabilirsin.",
+      note:
+        joinNotes(
+          // Ardından cümle geliyorsa nokta ile ayrılır.
+          reason ? `Açıklama: ${reason}${!next || /[.!?]$/.test(reason) ? "" : "."}` : null,
+          next
+        ) || "Sorunun varsa müşteri hizmetlerimize yazabilirsin.",
       refundAmount: null,
-      returnCode,
+      // Reddedilen iadenin kodu geçersiz: müşteriye gösterilmez.
+      returnCode: null,
     }
   }
 
@@ -122,7 +174,10 @@ export function resolveReturnStatus(ret: ReturnStatusInput | null | undefined): 
       label: "Para iade edildi",
       tone: "done",
       note: hasUnacceptedItems(meta)
-        ? "Bazı ürünler kabul edilmedi; kabul edilenlerin tutarı kartına iade edildi. Hesabına yansıması bankana göre birkaç gün sürebilir."
+        ? joinNotes(
+            "Bazı ürünler kabul edilmedi; kabul edilenlerin tutarı kartına iade edildi. Hesabına yansıması bankana göre birkaç gün sürebilir.",
+            sendBackNote(meta)
+          )
         : "Tutar kartına iade edildi. Hesabına yansıması bankana göre birkaç gün sürebilir.",
       refundAmount: amount(refund.amount),
       returnCode,
@@ -135,7 +190,7 @@ export function resolveReturnStatus(ret: ReturnStatusInput | null | undefined): 
       label: "Ürün bize ulaştı",
       tone: "progress",
       note: hasUnacceptedItems(meta)
-        ? "Bazı ürünler kabul edilmedi. Kabul edilenlerin para iadesi hazırlanıyor."
+        ? joinNotes("Bazı ürünler kabul edilmedi. Kabul edilenlerin para iadesi hazırlanıyor.", sendBackNote(meta))
         : "Para iaden hazırlanıyor, kartına geçince e-posta göndereceğiz.",
       refundAmount: null,
       returnCode,

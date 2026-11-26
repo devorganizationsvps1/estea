@@ -37,6 +37,10 @@ export type OpsEventKind =
   | "return.refund_failed"
   | "return.refunded"
   | "return.canceled"
+  | "return.rejected"
+  | "return.send_back"
+  | "return.send_back_failed"
+  | "return.send_back_returned"
   | "exchange.requested"
   | "exchange.shipped"
   | "exchange.failed"
@@ -108,6 +112,10 @@ const KIND_LABEL: Record<OpsEventKind, string> = {
   "return.refund_failed": "İade parası gönderilemedi",
   "return.refunded": "İade yapıldı",
   "return.canceled": "İade iptal edildi",
+  "return.rejected": "İade reddedildi",
+  "return.send_back": "Reddedilen ürün geri gönderimi",
+  "return.send_back_failed": "Geri gönderim açılamadı",
+  "return.send_back_returned": "Geri gönderilen paket bize döndü",
   "exchange.requested": "Değişim talebi",
   "exchange.shipped": "Değişim gönderisi açıldı",
   "exchange.failed": "Değişim gönderisi açılamadı",
@@ -169,6 +177,8 @@ const FEED_KINDS = new Set<OpsEventKind>([
   "return.requested",
   "return.refund_failed",
   "return.code_failed",
+  "return.send_back_failed",
+  "return.send_back_returned",
   "exchange.requested",
   "exchange.failed",
 ])

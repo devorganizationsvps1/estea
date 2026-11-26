@@ -10,6 +10,7 @@ import { formatTL } from "../lib/money"
 import { resolveNextStep, type StatusAction } from "../lib/order-next-step"
 import { nextOrderStatusAction, ORDER_STATUS_BADGE, resolveOrderTimeline, type OrderTimelineInput } from "../lib/order-timeline"
 import { printOrderLabels, skippedLabelsMessage } from "../lib/print-labels"
+import { skippedShipmentMessage } from "../lib/skipped-shipment"
 
 type OrderPayload = {
   order?: Omit<OrderTimelineInput, "payment_collections"> & {
@@ -134,8 +135,10 @@ const OrderStatusWidget = () => {
 
   const openShipment = useMutation({
     mutationFn: () => postJson(`/admin/orders/${orderId}/fulfillment/retry`),
-    onSuccess: () => {
-      toast.success("Kargo gönderisi açıldı.")
+    onSuccess: (result: unknown) => {
+      const skipped = skippedShipmentMessage(result)
+      if (skipped) toast.info(skipped)
+      else toast.success("Kargo gönderisi açıldı.")
       refresh()
     },
     onError: (e: Error) => {
