@@ -1,4 +1,5 @@
 import { computeRefundHash } from "../modules/paytr/hash"
+import { paytrSignal } from "../modules/paytr/http"
 
 /**
  * PayTR Durum Sorgu (POST /odeme/durum-sorgu) — salt okuma.
@@ -90,6 +91,7 @@ export async function queryPaytrStatus(
     const res = await fetchImpl("https://www.paytr.com/odeme/durum-sorgu", {
       method: "POST",
       body: new URLSearchParams({ merchant_id: merchantId, merchant_oid: merchantOid, paytr_token: paytrToken }),
+      signal: paytrSignal(),
     })
     const text = await res.text()
     let json: Record<string, unknown>

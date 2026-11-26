@@ -724,10 +724,17 @@ export async function reconcilePaytrCheckouts(
     }
   }
 
-  const pending = (await svc.listPaytrCheckouts(
-    { status: "pending" },
-    { take: 200, order: { created_at: "DESC" } }
-  )) as unknown as PaytrCheckoutRecord[]
+  // Tüm bekleyen denemeler sayfalanarak okunur (sabit 200 sınırı eskileri hiç sorgulamıyor,
+  // süresini de doldurmuyordu). Liste işlenmeden önce toplanır: işlerken durum değişir.
+  const pending: PaytrCheckoutRecord[] = []
+  for (let page = 0; page < 50; page++) {
+    const rows = (await svc.listPaytrCheckouts(
+      { status: "pending" },
+      { take: 200, skip: page * 200, order: { created_at: "DESC" } }
+    )) as unknown as PaytrCheckoutRecord[]
+    pending.push(...rows)
+    if (rows.length < 200) break
+  }
 
   for (const row of pending) {
     const createdAt = new Date(row.created_at)

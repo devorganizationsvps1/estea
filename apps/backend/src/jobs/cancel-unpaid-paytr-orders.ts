@@ -25,6 +25,7 @@ import { recordOpsEvent } from "../lib/ops-events"
  *
  * Env:
  *   UNPAID_ORDER_TIMEOUT_MINUTES (default 30)
+ *   UNPAID_ORDER_LOOKBACK_DAYS (default 14) — bundan eski siparişlere bakılmaz
  */
 export default async function cancelUnpaidPaytrOrdersJob(
   container: MedusaContainer
@@ -49,7 +50,14 @@ export default async function cancelUnpaidPaytrOrdersJob(
     graph: (args: Record<string, unknown>) => Promise<{ data: unknown }>
   }
 
-  const { data: orders } = await query.graph({
+  // Ödenmiş siparişler de "pending" kalır: pencere + sayfalama olmadan her turda tüm
+  // sipariş geçmişi okunurdu. Pencereden eski ödenmemiş sipariş bu işin konusu değil.
+  const lookbackDays = Math.max(1, Number(process.env.UNPAID_ORDER_LOOKBACK_DAYS || 14) || 14)
+  const since = new Date(Date.now() - lookbackDays * 86_400_000)
+  const take = 200
+  const orders: unknown[] = []
+  for (let page = 0; page < 50; page++) {
+    const { data } = await query.graph({
     entity: "order",
     fields: [
       "id",
@@ -66,9 +74,14 @@ export default async function cancelUnpaidPaytrOrdersJob(
     ],
     filters: {
       status: "pending",
-      created_at: { $lte: cutoff },
+      created_at: { $lte: cutoff, $gte: since },
     },
-  })
+    pagination: { take, skip: page * take, order: { created_at: "ASC" } },
+    })
+    const rows = (data as unknown[]) || []
+    orders.push(...rows)
+    if (rows.length < take) break
+  }
 
   const candidates = (orders || []) as {
     id: string

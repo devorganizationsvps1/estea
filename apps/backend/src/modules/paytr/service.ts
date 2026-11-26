@@ -43,6 +43,8 @@ import {
   mockPaytrIadeFetch,
 } from "./mock-iade"
 import { assertPaytrEnvAtBoot } from "./env-guard"
+import { paytrSignal } from "./http"
+import { queryPaytrStatus } from "../../lib/paytr-status"
 
 type PaytrOptions = {
   merchantId?: string
@@ -332,6 +334,7 @@ class PaytrProviderService extends AbstractPaymentProvider<PaytrOptions> {
           method: "POST",
           body: formBuffer as unknown as BodyInit,
           headers: formHeaders,
+          signal: paytrSignal(),
         }
       )
 
@@ -448,8 +451,8 @@ class PaytrProviderService extends AbstractPaymentProvider<PaytrOptions> {
    * - return_amount: Medusa major-unit TRY → "199.90" (iade API kuruş DEĞİL;
    *   get-token'daki ×100 yalnızca ödeme alma tarafına özel)
    * - Senkron JSON yanıt; status !== success → throw (Medusa refund fail)
-   * - Idempotency: aynı reference_no ile daha önce success kaydı varsa API'ye
-   *   tekrar gitmeden success döner (payment data.paytr_refunds).
+   * - Tekrar koruması: istekten önce PayTR durum sorgusuna bakılır; aynı reference_no
+   *   ile iade orada görünüyorsa ikinci istek atılmaz (kayıt tamamlanır).
    */
   async refundPayment(input: RefundPaymentInput): Promise<RefundPaymentOutput> {
     const data = { ...((input.data || {}) as PaytrSessionData) }
@@ -489,8 +492,7 @@ class PaytrProviderService extends AbstractPaymentProvider<PaytrOptions> {
       priorRefunds.length
     )
 
-    // Aynı reference_no + tutar ile success kaydı varsa PayTR'a tekrar gitme
-    // (retry / Medusa re-entry; kasıtlı yeni kısmi iade yeni slot → yeni ref).
+    // Kayıtta aynı reference_no + tutar ile success varsa PayTR'a tekrar gitme.
     const alreadyDone = priorRefunds.find(
       (r) =>
         r.reference_no === referenceNo &&
@@ -503,6 +505,38 @@ class PaytrProviderService extends AbstractPaymentProvider<PaytrOptions> {
           `return_amount=${returnAmount} reference_no=${referenceNo}`
       )
       return { data }
+    }
+
+    // Tekrar koruması: PayTR iadeyi yapmış ama kaydı bize yazılamamış olabilir (yanıt
+    // kayboldu / veritabanı yazımı düştü). Kayıtlı iade sayısı değişmediği için aynı
+    // reference_no üretilir; PayTR durum sorgusunda bu referansla iade görünüyorsa
+    // ikinci istek atılmaz, kayıt tamamlanır. Sorgu başarısızsa iade normal yoldan gider.
+    if (!isPaytrMockEnabled()) {
+      const status = await queryPaytrStatus(merchantOid)
+      const done = status.ok
+        ? status.returns.find(
+            (r) =>
+              r.reference_no === referenceNo &&
+              Math.abs(r.amount - Number(returnAmount)) <= 0.01
+          )
+        : undefined
+      if (done) {
+        const record: PaytrRefundRecord = {
+          reference_no: referenceNo,
+          return_amount: returnAmount,
+          status: "success",
+          at: new Date().toISOString(),
+        }
+        priorRefunds.push(record)
+        data.paytr_refunds = priorRefunds
+        data.last_refund_at = record.at
+        data.last_refund_amount = record.return_amount
+        this.logger_.warn(
+          `[paytr] refundPayment: iade PayTR'de zaten var, tekrar istenmedi — merchant_oid=${merchantOid} ` +
+            `return_amount=${returnAmount} reference_no=${referenceNo}`
+        )
+        return { data }
+      }
     }
 
     const paytrToken = computeRefundHash({
@@ -541,6 +575,7 @@ class PaytrProviderService extends AbstractPaymentProvider<PaytrOptions> {
             method: "POST",
             body: formBuffer as unknown as BodyInit,
             headers: formHeaders,
+            signal: paytrSignal(),
           })
 
       const text = await response.text()

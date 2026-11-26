@@ -14,14 +14,14 @@ import {
   isPaytrMockEnabled,
   mockPaytrIadeFetch,
 } from "../modules/paytr/mock-iade"
+import { paytrSignal } from "../modules/paytr/http"
 import { createNotificationIdempotent } from "./notify"
 
 /**
  * PayTR tahsilatı var, Medusa siparişi iptal/yok/tutarsız — /odeme/iade.
  * Medusa refund workflow kullanmaz (henüz capture olmamış olabilir).
  *
- * Gerçek HTTP yalnızca: mock kapalı VE (prod öneksiz VEYA test_mode=1).
- * test_mode=0 + önek → reddedilir (canlı dışı ortamda canlı iade yok).
+ * Gerçek HTTP yalnızca mock kapalı VE önek boşken (canlı). Önek doluyken reddedilir.
  */
 export async function compensatePaytrCharge(input: {
   merchantOid: string
@@ -36,12 +36,13 @@ export async function compensatePaytrCharge(input: {
     return { ok: false, message: "PAYTR_* credentials eksik" }
   }
 
+  // /odeme/iade'nin test_mode parametresi yok: canlı dışı ortamda (önek dolu) gerçek iade
+  // atılmaz — refundPayment ile aynı kural (modules/paytr/service.ts).
   const prefix = paytrOidPrefix()
-  const testMode = (process.env.PAYTR_TEST_MODE ?? "1").trim()
-  if (prefix && !isPaytrMockEnabled() && testMode !== "1") {
+  if (prefix && !isPaytrMockEnabled()) {
     return {
       ok: false,
-      message: `PAYTR_OID_PREFIX=${prefix} ve PAYTR_TEST_MODE=${testMode} — gerçek iade yok`,
+      message: `PAYTR_OID_PREFIX=${prefix} (canlı dışı ortam) — gerçek iade yok, PAYTR_MOCK=1 kullanın`,
     }
   }
 
@@ -102,6 +103,7 @@ export async function postPaytrRefund(input: {
           method: "POST",
           body: form.getBuffer() as unknown as BodyInit,
           headers: form.getHeaders() as Record<string, string>,
+          signal: paytrSignal(),
         })
     const text = await response.text()
     let json: { status?: string; err_msg?: string; reason?: string }
