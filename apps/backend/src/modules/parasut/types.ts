@@ -17,12 +17,26 @@ export type ParasutInvoiceStatus =
 
 export type ParasutConnectionStatus = {
   mode: "mock" | "live"
-  env: "test" | "prod"
+  env: "prod" | "staging"
   clientIdConfigured: boolean
   companyIdConfigured: boolean
   baseUrl: string
-  oauthUrl: string
+  oauthIssuer: string
+  redirectUri: string
   dryRun: boolean
+}
+
+/** Admin'deki Paraşüt bağlantı durumu (refresh token veritabanında). */
+export type ParasutAuthorizationStatus = {
+  connected: boolean
+  /** Bağlantı başka istemci / ortam için kurulmuş (env değişti) → yeniden bağlanmak gerekir */
+  stale: boolean
+  connectedAt: string | null
+  connectedBy: string | null
+  lastRefreshedAt: string | null
+  refreshExpiresAt: string | null
+  lastError: string | null
+  lastErrorAt: string | null
 }
 
 export type ParasutContactInput = {
@@ -106,10 +120,19 @@ export type ParasutSalesInvoiceInput = {
   } | null
   /** Sipariş geneli indirim (major unit) */
   orderDiscount?: number | null
+  /** Sipariş tarihi YYYY-MM-DD — order_no ile birlikte resmileştirmede zorunlu */
+  orderDate?: string | null
+  /**
+   * Paraşüt external_reference_key (UUID): aynı anahtarla ikinci fatura açılmaz.
+   * Siparişe bir kez üretilip metadata'da saklanır.
+   */
+  referenceKey?: string | null
 }
 
 export type ParasutSalesInvoiceResult = {
   invoiceId: string
+  /** Bu anahtarla daha önce açılmış fatura döndü (yeni kayıt açılmadı) */
+  existing?: boolean
   mock?: boolean
 }
 
@@ -152,7 +175,9 @@ export type ParasutFinalizeResult = {
 
 export type ParasutPdfResult = {
   invoiceId: string
+  /** Paraşüt'ün süreli PDF adresi — saklamayın, gerektiğinde yeniden alın */
   pdfUrl: string
+  expiresAt?: string
   mock?: boolean
 }
 
@@ -191,7 +216,13 @@ export type ParasutOrderInvoiceMeta = {
   formal_id?: string
   invoice_number?: string
   invoice_type?: ParasutInvoiceType
+  /**
+   * Mock modda sahte PDF adresi. Canlıda Paraşüt adresi süreli olduğu için yazılmaz;
+   * PDF imzalı /parasut/invoice-pdf bağlantısıyla her açılışta tazelenir.
+   */
   pdf_url?: string
+  /** Paraşüt external_reference_key (UUID) — belirsiz oluşturma bununla çözülür */
+  reference_key?: string
   tax_number?: string | null
   error?: string
   at?: string

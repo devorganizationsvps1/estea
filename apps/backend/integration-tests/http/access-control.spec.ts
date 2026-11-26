@@ -17,7 +17,7 @@ import {
 jest.setTimeout(180 * 1000)
 
 /** src/api/admin altındaki özel uçlar — yeni uç eklenince buraya da eklenmeli. */
-const ADMIN_ROUTES: [method: "get" | "post", path: string][] = [
+const ADMIN_ROUTES: [method: "get" | "post" | "delete", path: string][] = [
   ["get", "/admin/custom"],
   ["get", "/admin/escay-exchanges"],
   ["get", "/admin/escay-labels/exchanges"],
@@ -31,6 +31,10 @@ const ADMIN_ROUTES: [method: "get" | "post", path: string][] = [
   ["get", "/admin/orders/order_x/bank-transfer"],
   ["post", "/admin/orders/order_x/bank-transfer/confirm"],
   ["post", "/admin/orders/order_x/parasut-invoice/retry"],
+  ["get", "/admin/orders/order_x/parasut-invoice/pdf"],
+  ["post", "/admin/parasut/connect"],
+  ["get", "/admin/parasut/connection"],
+  ["delete", "/admin/parasut/connection"],
   ["post", "/admin/orders/order_x/contracts"],
   ["get", "/admin/orders/order_x/contracts/distance-sales"],
   ["post", "/admin/orders/order_x/escay-cancel"],
@@ -167,9 +171,22 @@ medusaIntegrationTestRunner({
         }
       })
 
+      it("Paraşüt'ün açık uçları: imzasız PDF bağlantısı ve sahte OAuth dönüşü hiçbir şey açmaz", async () => {
+        const order = await placeGuestStubOrder(api, fx, variantId, `pdf-${Date.now()}@escay.test`)
+        for (const query of ["", `?o=${order.id}`, `?o=${order.id}&s=uydurma`]) {
+          const res = await api.get(`/parasut/invoice-pdf${query}`, { ...noThrow, maxRedirects: 0 })
+          expect({ query, status: res.status }).toEqual({ query, status: 404 })
+        }
+
+        // Bekleyen yetkilendirme yokken gelen code/state token'a çevrilmez, admin sayfasına hata döner.
+        const cb = await api.get(`/parasut/oauth/callback?code=c&state=sahte`, { ...noThrow, maxRedirects: 0 })
+        expect(cb.status).toEqual(302)
+        expect(String(cb.headers.location)).toMatch(/^\/app\/parasut\?baglanti=hata/)
+      })
+
       it("admin token'ıyla liste uçları açılır", async () => {
         const admin = await createAdminHeaders(getContainer())
-        for (const path of ["/admin/escay-nav-counts", "/admin/escay-returns", "/admin/ops-events"]) {
+        for (const path of ["/admin/escay-nav-counts", "/admin/escay-returns", "/admin/ops-events", "/admin/parasut/connection"]) {
           const res = await api.get(path, { ...admin, ...noThrow })
           expect({ path, status: res.status }).toEqual({ path, status: 200 })
         }

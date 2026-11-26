@@ -397,12 +397,14 @@ Veri modeli: özel tablo **yok**; her şey Medusa `return`/`order` `metadata`'s�
 
 ### 4.10 Paraşüt fatura + Shopside (2026-11-24; BizimHesap iptal edildi)
 
-Modüller `src/modules/parasut` ve `src/modules/shopside` (DB modeli yok; durum `order.metadata.parasut_invoice`). Karar ve açık sorular: `docs/ESCAY-KARARLAR.md` K14–K16.
+Modüller `src/modules/parasut` ve `src/modules/shopside` (fatura durumu `order.metadata.parasut_invoice`; tek tablo `parasut_connection` = OAuth bağlantısı). Karar ve açık sorular: `docs/ESCAY-KARARLAR.md` K14–K16.
 
-- **Akış:** `delivery.created` (kargo takibi ya da admin "Teslim edildi") → tahsilat kontrolü → kilit → cari (`ensureContact`) → `pending` → satış faturası → e-arşiv / e-fatura → `issued` (`invoice_number`, `pdf_url`) → müşteriye fatura maili. Kimlikler boşsa mock; `PARASUT_DRY_RUN` ya da `PAYTR_OID_PREFIX` doluyken taslak açılır, e-belge kesilmez (`draft_dryrun`); dry-run kapanınca aynı taslak resmileşir.
+- **Giriş:** OAuth2 Authorization Code + PKCE (`id.parasut.com`, Keycloak; password grant yok). Admin → Paraşüt sayfası → `POST /admin/parasut/connect` yetkilendirme adresi (state + verifier 10 dk) → Paraşüt onayı → `GET /parasut/oauth/callback` (state tek kullanımlık, token sahibinin `PARASUT_COMPANY_ID`'ye erişimi `/me` ile doğrulanır) → refresh token tabloya. Access token (~5 dk) satır kilidi (`FOR UPDATE`) altında yenilenir; sunucu ve worker aynı token'ı paylaşır, dönen yeni refresh token saklanır. 401'de bir kez yenileyip tekrar; 403 tekrar denenmez. `invalid_grant` bağlantıyı düşürür, admin sayfası sebebi gösterir.
+
+- **Akış:** `delivery.created` (kargo takibi ya da admin "Teslim edildi") → tahsilat kontrolü → kilit → cari (`ensureContact`) → `pending` → satış faturası (`external_reference_key` = siparişe bir kez üretilen UUID, `order_no` + `order_date`) → alıcı kontrolü (`e_invoice_inbox_checks`, VKN ve TCKN; kontrol edilemezse e-arşive düşülmez) → e-arşiv / e-fatura (`scenario` + posta kutusu `to`) → 202 trackable job bitene kadar beklenir → numara faturanın `active_e_document`'ından → `issued` → müşteriye fatura maili. Faturanın zaten aktif e-belgesi varsa yeni belge POST edilmez. PDF adresi süreli olduğu için saklanmaz: mailde imzalı `/parasut/invoice-pdf?o=&s=`, adminde `/admin/orders/:id/parasut-invoice/pdf` her açılışta tazeler. Kimlikler boşsa mock; `PARASUT_DRY_RUN` ya da `PAYTR_OID_PREFIX` doluyken taslak açılır, e-belge kesilmez (`draft_dryrun`); dry-run kapanınca aynı taslak resmileşir.
 - **KDV:** Medusa fiyatları KDV dahil; Paraşüt birim fiyatı KDV hariç (2 hane). Yuvarlama payı adet başına 1 kuruş; bunu aşan toplam farkında fatura gönderilmez. Satır KDV `tax_lines`'tan, kargo KDV'si siparişin kargo vergi satırından.
 - **Ürün:** SKU = Paraşüt ürün kodu; eşleşmeyen ürün `PARASUT_PRODUCT_CREATE` açıksa oluşturulur. Stok Paraşüt'ten okunduğu için ürünleri stok takibi açık olarak elle açmak önerilir (`parasut:product-match` raporu).
-- **Hata:** kesin ret `error`, job `retry-parasut-invoices` 8 denemeye kadar dener. Satış faturası isteğinde zaman aşımı / 5xx `unknown`: kayıt açılmış olabilir, otomatik denenmez, admin Paraşüt'te kontrol edip onaylar. Satış faturası açılıp resmileşme kaldıysa tekrar deneme yeni fatura açmaz.
+- **Hata:** kesin ret `error`, job `retry-parasut-invoices` 8 denemeye kadar dener. Satış faturası isteğinde zaman aşımı / 5xx `unknown`: kayıt açılmış olabilir; tekrar denemede `find_by_external_reference_key` ile aranır, varsa o fatura resmileşir, yoksa aynı anahtarla açılır (Paraşüt ikinciyi 422 ile reddeder, mevcut id'yi verir). Anahtarsız eski kayıt otomatik denenmez, admin Paraşüt'te kontrol edip onaylar. Satış faturası açılıp resmileşme kaldıysa tekrar deneme yeni fatura açmaz.
 - **İade faturası:** varsayılan elle. `escay.return_refunded` → `metadata.parasut_refund_invoices[return_id]` `manual_required` + admin maili + `invoice.refund_manual` olayı. `PARASUT_REFUND_INVOICE_AUTO=true` API'den keser (gerçek hesapta doğrulanmadı).
 - **Stok:** sahibi Paraşüt. Job `sync-stock` (5 dk): Paraşüt stoğu − faturasız site adetleri − Shopside'daki faturasız pazaryeri siparişleri → Medusa; Medusa satılabilir adedi → Shopside. `PARASUT_STOCK_APPLY` / `SHOPSIDE_STOCK_APPLY` kapalıyken yalnız rapor.
 - **Shopside:** pazaryeri siparişleri orada yönetilir ve faturası Paraşüt'ten kesilir; Medusa'ya sipariş olarak alınmaz. Shopside dışarıdan sipariş kabul etmediği için site siparişi oraya gitmez.
@@ -786,7 +788,8 @@ DNS tarafı: MX Google, SPF `include:_spf.google.com`, Google DKIM, DMARC. Gmail
 
 | Değişken | Açıklama | Es Çay |
 |---|---|---|
-| `PARASUT_CLIENT_ID`, `PARASUT_CLIENT_SECRET`, `PARASUT_USERNAME`, `PARASUT_PASSWORD`, `PARASUT_COMPANY_ID` | OAuth2 kimlikleri + firma no; biri boşsa mock | Es Çay hesabı (K14) |
+| `PARASUT_CLIENT_ID`, `PARASUT_CLIENT_SECRET`, `PARASUT_COMPANY_ID` | OAuth2 istemcisi + firma no; biri boşsa mock. Bağlantı admin → Paraşüt'ten kurulur | Es Çay hesabı (K14) |
+| `PARASUT_ENV`, `PARASUT_REDIRECT_URI` | `prod` / `staging`; geri dönüş adresi başvurudakiyle birebir (boşsa `MEDUSA_BACKEND_PUBLIC_URL` + `/parasut/oauth/callback`) | K14 |
 | `PARASUT_DRY_RUN` | `true` → taslak satış faturası, e-belge yok | Testte `true` |
 | `PARASUT_DEFAULT_VAT_RATE` | Ürün satırı KDV %; boşsa `KDV_RATE` | K2 |
 | `PARASUT_SHIPPING_VAT_RATE` | Kargo satırı KDV % (20) | Aynen |

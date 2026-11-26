@@ -5,12 +5,17 @@
  *
  * Çift fatura koruması:
  *  - gönderim sipariş kilidi altında, satış faturası isteğinden önce `pending` yazılır
- *  - satış faturası isteğinin sonucu belirsizse (zaman aşımı / 5xx) `unknown` olur,
- *    admin Paraşüt'te kontrol edip onay vermeden tekrar gitmez
+ *  - satış faturası Paraşüt external_reference_key (siparişe bir kez üretilen UUID) ile
+ *    açılır: aynı anahtarla ikinci fatura açılmaz
+ *  - satış faturası isteğinin sonucu belirsizse (zaman aşımı / 5xx) `unknown` olur; tekrar
+ *    denemede önce bu anahtarla Paraşüt'te aranır (varsa o fatura resmileştirilir).
+ *    Anahtarsız eski kayıt admin Paraşüt'te kontrol edip onay vermeden tekrar gitmez
  *  - satış faturası açıldıysa (invoice_id var) tekrar deneme yeni fatura AÇMAZ,
  *    aynı faturayı resmileştirir
  *  - toplam siparişle tutmuyorsa hiç gönderilmez
  */
+
+import { randomUUID } from "node:crypto"
 
 import type { MedusaContainer } from "@medusajs/framework/types"
 import {
@@ -345,6 +350,7 @@ async function issueUnderLock(
       "id",
       "display_id",
       "status",
+      "created_at",
       "email",
       "currency_code",
       "metadata",
@@ -409,6 +415,7 @@ async function issueUnderLock(
         id: string
         display_id?: number | string | null
         status?: string | null
+        created_at?: string | Date | null
         email?: string | null
         currency_code?: string | null
         metadata?: Record<string, unknown> | null
@@ -501,12 +508,37 @@ async function issueUnderLock(
   const createUncertain =
     existing?.status === "unknown" ||
     (existing?.status === "pending" && !existing.invoice_id)
-  if (createUncertain && !forceFreshDraft && !options?.confirmedNotInParasut) {
+  // Aynı bağlantıda üretilmiş anahtar: Paraşüt'te bu anahtarla fatura var mı bakılabilir.
+  const sameModeKey =
+    existing?.reference_key && existing.mode === mode ? existing.reference_key : undefined
+  /** Belirsiz oluşturmanın anahtarla bulunan sonucu */
+  let recoveredInvoiceId: string | undefined
+  if (createUncertain && !forceFreshDraft && sameModeKey) {
+    try {
+      recoveredInvoiceId = (await parasut.findSalesInvoiceByReferenceKey(sameModeKey)) ?? undefined
+    } catch (err) {
+      logger.warn(
+        `[parasut-invoice] Anahtarla arama başarısız order=${orderId}: ${String(err)} — sonra tekrar denenecek`
+      )
+      return { ok: false, skipped: true, meta: existing! }
+    }
+    logger.info(
+      `[parasut-invoice] Belirsiz kayıt çözüldü order=${orderId}: ${
+        recoveredInvoiceId ? `Paraşüt'te var (invoice=${recoveredInvoiceId})` : "Paraşüt'te yok, aynı anahtarla açılacak"
+      }`
+    )
+  } else if (createUncertain && !forceFreshDraft && !options?.confirmedNotInParasut) {
     logger.warn(
       `[parasut-invoice] Skip — order=${orderId} status=${existing!.status}: kayıt açılmış olabilir, admin onayı gerekir`
     )
     return { ok: false, skipped: true, meta: existing! }
   }
+  // Admin "Paraşüt'te yok" onayı ya da taze taslak: eski anahtar kullanılmaz (Paraşüt'te
+  // o anahtarla silinmiş bir kayıt kalmış olabilir). Diğer hallerde aynı anahtar korunur.
+  const referenceKey =
+    !forceFreshDraft && !options?.confirmedNotInParasut && sameModeKey
+      ? sameModeKey
+      : randomUUID()
 
   // Parası tamamen iade edilmiş (iptalsiz) sipariş faturalanmaz.
   const payments = (order.payment_collections || []).flatMap((pc) => pc.payments || [])
@@ -551,18 +583,20 @@ async function issueUnderLock(
 
   // Devam edilecek satış faturası: yalnız aynı (canlı) bağlantıda açılmış gerçek kayıt.
   const resumeInvoiceId =
-    !forceFreshDraft &&
+    recoveredInvoiceId ||
+    (!forceFreshDraft &&
     existing?.invoice_id &&
     existing.mode === mode &&
     (existing.status === "pending" ||
       existing.status === "error" ||
       existing.status === "draft_dryrun")
       ? existing.invoice_id
-      : undefined
+      : undefined)
 
   const carry = {
     retry_count: existing?.retry_count,
     admin_notified_at: existing?.admin_notified_at,
+    reference_key: referenceKey,
   }
   const invoicedItems = (order.items || []).map((item) => ({
     line_item_id: item.id,
@@ -582,15 +616,20 @@ async function issueUnderLock(
       orderId: order.id,
       internetSale,
     })
+    // Canlı PDF adresi süreli: saklanmaz, imzalı /parasut/invoice-pdf bağlantısı her
+    // açılışta tazeler. Mock'ta sahte adres yazılır (smoke testleri okur).
     let pdfUrl: string | undefined
-    try {
-      pdfUrl = (await parasut.getInvoicePdf(invoiceId!)).pdfUrl
-    } catch (pdfErr) {
-      logger.warn(`[parasut-invoice] PDF alınamadı order=${orderId}: ${String(pdfErr)}`)
+    if (mode === "mock") {
+      try {
+        pdfUrl = (await parasut.getInvoicePdf(invoiceId!)).pdfUrl
+      } catch (pdfErr) {
+        logger.warn(`[parasut-invoice] PDF alınamadı order=${orderId}: ${String(pdfErr)}`)
+      }
     }
     const meta: ParasutOrderInvoiceMeta = {
       status: "issued",
       mode,
+      reference_key: referenceKey,
       contact_id: contactId,
       invoice_id: invoiceId,
       formal_id: formal.formalId,
@@ -632,8 +671,12 @@ async function issueUnderLock(
         )
         const meta: ParasutOrderInvoiceMeta = {
           ...existing!,
+          ...carry,
           status: "draft_dryrun",
           mode,
+          invoice_id: resumeInvoiceId,
+          contact_id: contactId,
+          items: invoicedItems,
           note: "dry_run_resume_not_formalized",
           at: new Date().toISOString(),
         }
@@ -645,9 +688,11 @@ async function issueUnderLock(
         `[parasut-invoice] Resume formalize — order=${orderId} invoice=${resumeInvoiceId}`
       )
       return await finalizeAndStore(
-        existing?.status === "draft_dryrun"
-          ? "formalized_from_dry_run_draft"
-          : "resumed_after_partial_failure"
+        recoveredInvoiceId
+          ? "recovered_by_reference_key"
+          : existing?.status === "draft_dryrun"
+            ? "formalized_from_dry_run_draft"
+            : "resumed_after_partial_failure"
       )
     }
 
@@ -752,6 +797,8 @@ async function issueUnderLock(
       description: `Es Çay sipariş ${displayId}`,
       lines,
       orderDiscount: residualOrderDiscountNet,
+      orderDate: order.created_at ? new Date(order.created_at).toISOString().slice(0, 10) : null,
+      referenceKey,
       shipping:
         shippingNet > 0
           ? { description: "Kargo", amount: shippingNet, vatRate: vatShipping }
@@ -807,6 +854,8 @@ async function issueUnderLock(
     const uncertain = creating && !invoiceId && isUncertainFailure(err)
     const meta: ParasutOrderInvoiceMeta = {
       ...carry,
+      // Henüz hiç istek atılmadıysa anahtar taşınmaz; atıldıysa belirsiz sonuç bununla çözülür.
+      reference_key: creating || invoiceId || recoveredInvoiceId ? referenceKey : existing?.reference_key,
       status: uncertain ? "unknown" : "error",
       mode,
       tax_number: taxNumber,

@@ -334,6 +334,8 @@ export async function syncStock(
 ): Promise<StockSyncResult> {
   const parasut = container.resolve<ParasutModuleService>(PARASUT_MODULE)
   if (!parasut.isStockConfigured()) return { status: "disabled" }
+  // Kimlik var ama admin'den bağlanılmadı: her 5 dakikada hata yazmasın.
+  if (!(await parasut.isConnected())) return { status: "disabled" }
   const shopsideService = container.resolve<ShopsideModuleService>(SHOPSIDE_MODULE)
   const shopside = shopsideService.isConfigured() ? shopsideService : null
 

@@ -253,11 +253,13 @@ module.exports = defineConfig({
       options: {
         clientId: process.env.PARASUT_CLIENT_ID,
         clientSecret: process.env.PARASUT_CLIENT_SECRET,
-        username: process.env.PARASUT_USERNAME,
-        password: process.env.PARASUT_PASSWORD,
         companyId: process.env.PARASUT_COMPANY_ID,
         baseUrl: process.env.PARASUT_BASE_URL,
-        env: process.env.PARASUT_ENV ?? "test",
+        oauthIssuer: process.env.PARASUT_OAUTH_ISSUER,
+        redirectUri: process.env.PARASUT_REDIRECT_URI,
+        // prod | staging (boş = prod)
+        env: process.env.PARASUT_ENV,
+        eInvoiceScenario: process.env.PARASUT_E_INVOICE_SCENARIO,
         defaultVatRate: process.env.PARASUT_DEFAULT_VAT_RATE,
         shippingVatRate: process.env.PARASUT_SHIPPING_VAT_RATE,
         dryRun: process.env.PARASUT_DRY_RUN,

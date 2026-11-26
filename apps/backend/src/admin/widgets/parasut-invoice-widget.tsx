@@ -183,10 +183,14 @@ const ParasutInvoiceWidget = () => {
                 Tutar: {formatTL(inv.total)}
               </Text>
             ) : null}
-            {inv.pdf_url ? (
+            {inv.status === "issued" && (inv.mode === "live" || inv.pdf_url) ? (
               <Text size="small">
                 <a
-                  href={inv.pdf_url}
+                  href={
+                    inv.mode === "live"
+                      ? `/admin/orders/${orderId}/parasut-invoice/pdf`
+                      : inv.pdf_url
+                  }
                   target="_blank"
                   rel="noreferrer"
                   className="text-ui-fg-interactive underline"

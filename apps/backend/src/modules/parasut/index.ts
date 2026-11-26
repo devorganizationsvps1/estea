@@ -14,10 +14,16 @@ export {
   normalizeOptions,
   toParasutCurrency,
   PARASUT_DEFAULT_BASE_URL,
-  PARASUT_DEFAULT_OAUTH_URL,
+  PARASUT_OAUTH_ISSUERS,
+  PARASUT_CALLBACK_PATH,
 } from "./options"
 export { ParasutClient, ParasutError, formatParasutErrorBody } from "./client"
-export type { ParasutMockBehavior, ParasutTransport } from "./client"
+export type {
+  ParasutMockBehavior,
+  ParasutTransport,
+  ParasutTokenProvider,
+} from "./client"
+export { ParasutReauthorizeError } from "./oauth"
 export {
   mockEnsureContact,
   mockCreateSalesInvoice,
@@ -41,6 +47,7 @@ export type {
   ParasutInvoiceType,
   ParasutInvoiceStatus,
   ParasutConnectionStatus,
+  ParasutAuthorizationStatus,
 } from "./types"
 
 export default Module(PARASUT_MODULE, {

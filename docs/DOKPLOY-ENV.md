@@ -97,12 +97,14 @@ SMTP_SECURE=false
 # Deploy sonrası logda "[smtp] Sunucu doğrulanamadı" olmamalı; SMTP_TEST_TO=<adres> npm run test:emails
 
 # Paraşüt: Es Çay'ın kendi hesabı (K14). Kimlikler verilene dek boş → mock.
+# Kimlikler girilip deploy edildikten sonra Admin → Paraşüt → "Paraşüt'e bağlan" (entegrasyon
+# kullanıcısıyla bir kez onay). Kullanıcı adı/şifre env'e girilmez; refresh token veritabanında.
 PARASUT_CLIENT_ID=
 PARASUT_CLIENT_SECRET=
-PARASUT_USERNAME=
-PARASUT_PASSWORD=
 PARASUT_COMPANY_ID=
 PARASUT_ENV=prod
+# Paraşüt başvurusundaki geri dönüş adresiyle birebir aynı (boşsa MEDUSA_BACKEND_PUBLIC_URL'den)
+PARASUT_REDIRECT_URI=https://api.esteacay.com/parasut/oauth/callback
 PARASUT_DRY_RUN=true
 PARASUT_DEFAULT_VAT_RATE=1
 PARASUT_SHIPPING_VAT_RATE=20

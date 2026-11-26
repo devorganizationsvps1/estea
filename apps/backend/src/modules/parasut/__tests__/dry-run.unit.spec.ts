@@ -96,11 +96,10 @@ describe("finalizeInvoice / refund DRY-RUN guard", () => {
       ...normalizeOptions({
         clientId: "cid",
         clientSecret: "secret",
-        username: "user@test",
-        password: "pass",
         companyId: "100001",
         dryRun,
       }),
+      tokenProvider: { getAccessToken: async () => "tok", invalidate: () => undefined },
       transport: async () => {
         httpCalls += 1
         return { ok: true, status: 200, text: async () => "{}" }
@@ -176,8 +175,6 @@ describe("Parasut HTTP error body logging", () => {
       ...normalizeOptions({
         clientId: "cid",
         clientSecret: "secret",
-        username: "user@test",
-        password: "pass",
         companyId: "100001",
         dryRun: true,
       }),
@@ -186,15 +183,8 @@ describe("Parasut HTTP error body logging", () => {
         warn: () => undefined,
         error: (m) => logs.push(m),
       },
+      tokenProvider: { getAccessToken: async () => "tok", invalidate: () => undefined },
       transport: async (url) => {
-        if (url.includes("/oauth")) {
-          return {
-            ok: true,
-            status: 200,
-            text: async () =>
-              JSON.stringify({ access_token: "tok", expires_in: 7200 }),
-          }
-        }
         return {
           ok: false,
           status: 422,

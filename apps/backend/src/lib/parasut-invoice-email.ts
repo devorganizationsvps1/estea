@@ -13,6 +13,7 @@ import type { ParasutOrderInvoiceMeta } from "../modules/parasut"
 import { buildInvoiceIssuedEmail } from "../emails/invoice-issued"
 import { COMPANY } from "../emails/company"
 import { createNotificationIdempotent } from "./notify"
+import { invoicePdfLink } from "./parasut-invoice-pdf"
 
 export async function sendInvoiceIssuedEmail(
   scope: MedusaContainer,
@@ -61,7 +62,8 @@ export async function sendInvoiceIssuedEmail(
     displayId,
     invoiceNumber: invoiceMeta.invoice_number || "—",
     invoiceType: invoiceMeta.invoice_type || "e_archive",
-    pdfUrl: invoiceMeta.pdf_url || null,
+    // Canlıda kalıcı imzalı bağlantı (Paraşüt adresi süreli); mock'ta sahte adres.
+    pdfUrl: invoiceMeta.mode === "live" ? invoicePdfLink(order.id) : invoiceMeta.pdf_url || null,
     supportEmail: COMPANY.emailOps,
   })
 

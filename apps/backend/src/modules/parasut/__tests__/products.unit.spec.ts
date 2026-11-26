@@ -15,22 +15,13 @@ function liveClient(opts: {
     ...normalizeOptions({
       clientId: "cid",
       clientSecret: "secret",
-      username: "user@test",
-      password: "pass",
       companyId: "100001",
       dryRun: opts.dryRun ?? true,
       productCreate: opts.productCreate,
       shippingProductId: opts.shippingProductId,
     }),
+    tokenProvider: { getAccessToken: async () => "tok", invalidate: () => undefined },
     transport: async (url, init) => {
-      if (url.includes("/oauth/token")) {
-        return {
-          ok: true,
-          status: 200,
-          text: async () =>
-            JSON.stringify({ access_token: "tok", expires_in: 7200 }),
-        }
-      }
       calls.push({
         method: init.method,
         url,
@@ -101,8 +92,6 @@ describe("productCreate default", () => {
     const base = {
       clientId: "a",
       clientSecret: "b",
-      username: "c",
-      password: "d",
       companyId: "1",
     }
     const prev = process.env.PARASUT_DRY_RUN

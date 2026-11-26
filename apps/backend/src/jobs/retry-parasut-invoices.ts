@@ -67,7 +67,8 @@ export default async function retryParasutInvoicesJob(
       continue
     }
 
-    if (inv.status === "pending" && !inv.invoice_id) {
+    // Anahtarlı kayıt: gönderim Paraşüt'te anahtarla arayıp sonucu kendisi kesinleştirir.
+    if (inv.status === "pending" && !inv.invoice_id && !inv.reference_key) {
       const age = Date.now() - new Date(inv.at || 0).getTime()
       if (age > STALE_PENDING_MS) {
         try {
@@ -89,7 +90,7 @@ export default async function retryParasutInvoicesJob(
       continue
     }
 
-    if (!shouldRetryParasutInvoice(inv.status, inv.invoice_id)) {
+    if (!shouldRetryParasutInvoice(inv.status, inv.invoice_id, inv.reference_key)) {
       skipped++
       continue
     }

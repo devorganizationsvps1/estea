@@ -41,6 +41,7 @@ export type ParasutSalesInvoicePayload = {
       due_date: string
       currency: string
       order_no: string
+      order_date: string
       invoice_discount_type?: "amount"
       invoice_discount_value?: number
     }
@@ -49,6 +50,9 @@ export type ParasutSalesInvoicePayload = {
         data: { type: "contacts"; id: string }
       }
       details: { data: ParasutSalesInvoiceDetail[] }
+      external_reference_key?: {
+        data: { type: "external_reference_keys"; id: string }
+      }
     }
   }
 }
@@ -106,6 +110,9 @@ export function buildSalesInvoicePayload(
     due_date: input.dueDate || new Date().toISOString().slice(0, 10),
     currency: toParasutCurrency(input.currencyCode),
     order_no: input.orderDisplayId || input.orderId,
+    // Resmileştirmede order_no doluysa order_date de zorunlu (Paraşüt OpenAPI).
+    order_date:
+      input.orderDate || input.issueDate || new Date().toISOString().slice(0, 10),
   }
   if (input.orderDiscount && input.orderDiscount > 0) {
     attributes.invoice_discount_type = "amount"
@@ -121,6 +128,13 @@ export function buildSalesInvoicePayload(
           data: { type: "contacts", id: input.contactId },
         },
         details: { data: details },
+        ...(input.referenceKey
+          ? {
+              external_reference_key: {
+                data: { type: "external_reference_keys" as const, id: input.referenceKey },
+              },
+            }
+          : {}),
       },
     },
   }

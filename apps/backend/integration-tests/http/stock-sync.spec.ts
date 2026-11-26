@@ -17,9 +17,8 @@ const realFetch = globalThis.fetch
 // medusa-config modül seçeneklerini runner'ın `env`'inden önce okuyor.
 process.env.PARASUT_CLIENT_ID = "test-client"
 process.env.PARASUT_CLIENT_SECRET = "test-secret"
-process.env.PARASUT_USERNAME = "test@escay.test"
-process.env.PARASUT_PASSWORD = "test-pass"
 process.env.PARASUT_COMPANY_ID = "42"
+process.env.PARASUT_ENV = "prod"
 process.env.PARASUT_STOCK_APPLY = "true"
 process.env.SHOPSIDE_API_KEY = "shopside-key"
 process.env.SHOPSIDE_API_SECRET = "shopside-secret"
@@ -43,8 +42,13 @@ function stubApis(parasut: Record<string, number>, shopside: Partial<ShopsideSta
   const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200 })
   globalThis.fetch = (async (url: unknown, init?: { body?: unknown }) => {
     const target = String(url)
+    if (target.includes("id.parasut.com")) {
+      // Bağlantı kaydındaki access token geçerli: yenileme beklenmez.
+      throw new Error(`Beklenmeyen Paraşüt token isteği: ${target}`)
+    }
     if (target.includes("api.parasut.com")) {
-      if (target.endsWith("/oauth/token")) return json({ access_token: "tok", expires_in: 7200 })
+      const auth = (init as { headers?: Record<string, string> } | undefined)?.headers?.Authorization
+      if (auth !== "Bearer tok") throw new Error(`Paraşüt isteği bağlantı kaydının token'ı olmadan: ${auth}`)
       if (target.includes("/v4/42/products?")) {
         return json({
           data: Object.entries(parasut).map(([code, stock], i) => ({
@@ -87,6 +91,32 @@ function stubApis(parasut: Record<string, number>, shopside: Partial<ShopsideSta
   return state
 }
 
+/**
+ * Admin'den "Paraşüt'e bağlan" yapılmış gibi bağlantı kaydı (parasut_connection).
+ * Access token bir saat geçerli: testte OAuth yenilemesi olmaz.
+ */
+async function connectParasut(container: MedusaContainer) {
+  const pg = container.resolve(ContainerRegistrationKeys.PG_CONNECTION) as {
+    raw: (sql: string, params?: unknown[]) => Promise<unknown>
+  }
+  await pg.raw(
+    `insert into parasut_connection (id, client_id, env, refresh_token, refresh_expires_at, access_token, access_expires_at, connected_at)
+     values ('default', ?, 'prod', 'refresh-tok', now() + interval '30 days', 'tok', now() + interval '1 hour', now())
+     on conflict (id) do update set client_id = excluded.client_id, env = excluded.env,
+       refresh_token = excluded.refresh_token, refresh_expires_at = excluded.refresh_expires_at,
+       access_token = excluded.access_token, access_expires_at = excluded.access_expires_at,
+       connected_at = excluded.connected_at, deleted_at = null`,
+    [process.env.PARASUT_CLIENT_ID]
+  )
+}
+
+async function disconnectParasut(container: MedusaContainer) {
+  const pg = container.resolve(ContainerRegistrationKeys.PG_CONNECTION) as {
+    raw: (sql: string) => Promise<unknown>
+  }
+  await pg.raw(`update parasut_connection set refresh_token = null, access_token = null where id = 'default'`)
+}
+
 async function readLevel(container: MedusaContainer, variantId: string) {
   const query = container.resolve(ContainerRegistrationKeys.QUERY)
   const { data } = await query.graph({
@@ -127,10 +157,25 @@ medusaIntegrationTestRunner({
         const [a, b] = products.map((p) => p.variants[0])
         synced = { id: a.id, sku: a.sku as string }
         absent = { id: b.id, sku: b.sku as string }
+        await connectParasut(container)
       })
 
       afterEach(() => {
         globalThis.fetch = realFetch
+      })
+
+      it("Paraşüt'e bağlanılmamışsa eşitleme kapalı, hiçbir yere istek atılmaz", async () => {
+        const container = getContainer()
+        await disconnectParasut(container)
+        try {
+          globalThis.fetch = (async (url: unknown) => {
+            throw new Error(`Bağlantısızken istek atıldı: ${String(url)}`)
+          }) as typeof fetch
+          expect((await syncStock(container)).status).toBe("disabled")
+          expect((await readLevel(container, synced.id)).stocked_quantity).toBe(100)
+        } finally {
+          await connectParasut(container)
+        }
       })
 
       it("eşleşen stoğu yazar, Paraşüt'te olmayana dokunmaz", async () => {

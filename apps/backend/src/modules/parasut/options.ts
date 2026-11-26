@@ -5,17 +5,23 @@
  * Kimlik gelince aynı kod yolu canlı client'a geçer.
  */
 
-export type ParasutEnv = "test" | "prod"
+/** prod: id.parasut.com; staging: id-staging.parasut.com (Paraşüt'ün açtığı 6 aylık staging firması). */
+export type ParasutEnv = "prod" | "staging"
+
+/** Paraşüt e-fatura senaryosu: basic = temel (alıcı reddedemez), commercial = ticari. */
+export type ParasutEInvoiceScenario = "basic" | "commercial"
 
 export type ParasutRawOptions = {
   clientId?: string
   clientSecret?: string
-  username?: string
-  password?: string
   companyId?: string
   baseUrl?: string
-  oauthUrl?: string
+  /** Keycloak realm kökü; boşsa env'e göre id.parasut.com / id-staging.parasut.com */
+  oauthIssuer?: string
+  /** Paraşüt başvurusunda kayıtlı geri dönüş adresi (birebir aynı olmalı) */
+  redirectUri?: string
   env?: string
+  eInvoiceScenario?: string
   defaultVatRate?: string | number
   /** Kargo kalemi KDV % — canlı fatura kanıtı: 20 (ürün 10) */
   shippingVatRate?: string | number
@@ -39,12 +45,12 @@ export type ParasutRawOptions = {
 export type ParasutOptions = {
   clientId: string
   clientSecret: string
-  username: string
-  password: string
   companyId: string
   baseUrl: string
-  oauthUrl: string
+  oauthIssuer: string
+  redirectUri: string
   env: ParasutEnv
+  eInvoiceScenario: ParasutEInvoiceScenario
   defaultVatRate: number
   shippingVatRate: number
   timeoutMs: number
@@ -66,7 +72,17 @@ export function toParasutCurrency(code?: string | null): string {
 }
 
 export const PARASUT_DEFAULT_BASE_URL = "https://api.parasut.com/v4"
-export const PARASUT_DEFAULT_OAUTH_URL = "https://api.parasut.com"
+export const PARASUT_OAUTH_ISSUERS: Record<ParasutEnv, string> = {
+  prod: "https://id.parasut.com/realms/parasut",
+  staging: "https://id-staging.parasut.com/realms/parasut",
+}
+export const PARASUT_CALLBACK_PATH = "/parasut/oauth/callback"
+
+/** PARASUT_REDIRECT_URI yoksa backend'in dış adresinden türetilir. */
+export function defaultRedirectUri(): string {
+  const base = (process.env.MEDUSA_BACKEND_PUBLIC_URL || "http://localhost:9000").replace(/\/$/, "")
+  return `${base}${PARASUT_CALLBACK_PATH}`
+}
 
 const PLACEHOLDER = new Set([
   "",
@@ -76,8 +92,6 @@ const PLACEHOLDER = new Set([
   "todo",
   "your-parasut-client-id",
   "your-parasut-client-secret",
-  "your-parasut-username",
-  "your-parasut-password",
   "your-parasut-company-id",
 ])
 
@@ -132,39 +146,42 @@ export function assertParasutDryRunEnabled(): void {
 
 /**
  * Retry job: `error` her zaman; `pending` yalnız satış faturası açılmışsa (invoice_id var,
- * resmileştirme kalmış). Satış faturası açılmadan kalan pending / unknown otomatik denenmez:
- * kayıt açılmış olabilir, kör tekrar çift fatura yazar.
+ * resmileştirme kalmış). Satış faturası açılmadan kalan pending / unknown yalnız
+ * external_reference_key varsa denenir: gönderim önce Paraşüt'te bu anahtarla fatura arar,
+ * bulursa onu kullanır, bulamazsa aynı anahtarla açar (Paraşüt ikinciyi reddeder).
+ * Anahtarsız eski kayıtlar otomatik denenmez: kör tekrar çift fatura yazar.
  */
 export function shouldRetryParasutInvoice(
   status?: string | null,
-  invoiceId?: string | null
+  invoiceId?: string | null,
+  referenceKey?: string | null
 ): boolean {
-  return status === "error" || (status === "pending" && Boolean(invoiceId))
+  if (status === "error") return true
+  if (status === "pending" && invoiceId) return true
+  return (status === "unknown" || status === "pending") && !invoiceId && Boolean(referenceKey)
 }
 
 /**
- * Tüm OAuth kimlik alanları dolu ve yer tutucu değilse canlı mod.
+ * İstemci kimliği + secret + firma no dolu ve yer tutucu değilse canlı mod.
  * Aksi halde mock — boot çökmez, gerçek HTTP atılmaz.
+ * Canlı modda API çağrısı için ayrıca admin'den "Paraşüt'e bağlan" yapılmış olmalı
+ * (refresh token veritabanında); bağlantı yoksa çağrılar hata verir, mock'a düşmez.
  */
 export function isMockMode(
-  options: Pick<
-    ParasutOptions,
-    "clientId" | "clientSecret" | "username" | "password" | "companyId"
-  >
+  options: Pick<ParasutOptions, "clientId" | "clientSecret" | "companyId">
 ): boolean {
   return (
     isPlaceholderCredential(options.clientId) ||
     isPlaceholderCredential(options.clientSecret) ||
-    isPlaceholderCredential(options.username) ||
-    isPlaceholderCredential(options.password) ||
     isPlaceholderCredential(options.companyId)
   )
 }
 
 export function normalizeOptions(raw: ParasutRawOptions = {}): ParasutOptions {
   const envRaw = text(raw.env).toLowerCase()
-  const env: ParasutEnv =
-    envRaw === "prod" || envRaw === "production" ? "prod" : "test"
+  // Eski şablondaki "test" staging sayılır; boş = prod.
+  const env: ParasutEnv = envRaw === "staging" || envRaw === "test" ? "staging" : "prod"
+  const scenarioRaw = text(raw.eInvoiceScenario).toLowerCase()
 
   const timeout = Number(raw.timeoutMs)
   const retries = Number(raw.maxRetries)
@@ -180,12 +197,12 @@ export function normalizeOptions(raw: ParasutRawOptions = {}): ParasutOptions {
   return {
     clientId: text(raw.clientId),
     clientSecret: text(raw.clientSecret),
-    username: text(raw.username),
-    password: text(raw.password),
     companyId: text(raw.companyId),
     baseUrl: text(raw.baseUrl) || PARASUT_DEFAULT_BASE_URL,
-    oauthUrl: text(raw.oauthUrl) || PARASUT_DEFAULT_OAUTH_URL,
+    oauthIssuer: (text(raw.oauthIssuer) || PARASUT_OAUTH_ISSUERS[env]).replace(/\/$/, ""),
+    redirectUri: text(raw.redirectUri) || defaultRedirectUri(),
     env,
+    eInvoiceScenario: scenarioRaw === "commercial" ? "commercial" : "basic",
     // Yalnız tax_lines boş satırda kullanılır. Çay %1 (K2: mali müşavir teyidi).
     defaultVatRate: Number.isFinite(vat) && vat > 0 ? vat : 1,
     shippingVatRate:

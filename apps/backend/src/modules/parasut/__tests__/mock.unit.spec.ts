@@ -33,8 +33,6 @@ describe("parasut options mock mode", () => {
     const opts = normalizeOptions({
       clientId: "cid",
       clientSecret: "secret",
-      username: "user@example.com",
-      password: "pass",
       companyId: "12345",
       env: "prod",
     })

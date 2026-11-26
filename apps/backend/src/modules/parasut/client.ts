@@ -1,11 +1,12 @@
 /**
  * Parasut API v4 HTTP istemcisi.
  *
- * - OAuth2 password grant + refresh_token (canlı mod)
- * - Retry/backoff iskeleti (429 / 5xx)
+ * - Access token dışarıdan gelir (ParasutTokenProvider): bağlantı veritabanında, yenileme
+ *   servis katmanında kilit altında (oauth.ts). 401'de token bir kez yenilenip istek tekrarlanır.
+ * - Retry/backoff (429 / 5xx); 403 asla tekrar denenmez (Paraşüt çok 401/403 alan istemciyi kapatır).
  * - mockMode: gerçek HTTP yok, mock.ts yanıtları
  *
- * Canlı endpoint yolları iskelet; kimlik gelince "fişi tak" ile devreye girer.
+ * Uç noktalar ve alanlar devhub.parasut.com/openapi.json (2026-11) ile doğrulandı.
  * Env boşken asla HTTP atılmaz.
  */
 
@@ -35,6 +36,7 @@ import type {
   ParasutFinalizeInput,
   ParasutFinalizeResult,
   ParasutInvoiceLineInput,
+  ParasutInvoiceType,
   ParasutPdfResult,
   ParasutProductInput,
   ParasutProductRecord,
@@ -69,12 +71,23 @@ export type ParasutMockBehavior = {
     | "checkVkn"
     | "getInvoicePdf"
   failMessage?: string
-  /** checkVkn fail → canlıda e_archive fallback; mock'ta da aynı davranış */
-  checkVknFallbackArchive?: boolean
+  /** findSalesInvoiceByReferenceKey mock yanıtı (yoksa null = bulunamadı) */
+  referenceKeyInvoiceId?: string | null
+}
+
+/** Access token kaynağı. invalidate: 401 alınan token'ı at, sonraki çağrı yenilesin. */
+export type ParasutTokenProvider = {
+  getAccessToken: () => Promise<string>
+  invalidate: (token: string) => void
 }
 
 export type ParasutClientOptions = ParasutOptions & {
   transport?: ParasutTransport
+  tokenProvider?: ParasutTokenProvider
+  /** e-belge işinin (trackable job) bitmesi için bekleme (ms). Varsayılan 60 sn. */
+  jobWaitMs?: number
+  /** Yoklama aralığı (ms). Testlerde 0. */
+  pollIntervalMs?: number
   forceMock?: boolean
   mockBehavior?: ParasutMockBehavior
   logger?: {
@@ -124,10 +137,20 @@ export class ParasutError extends Error {
   }
 }
 
-type TokenState = {
-  accessToken: string
-  refreshToken?: string
-  expiresAt: number
+/** Satış faturasının aktif e-belgesi (e-arşiv / e-fatura). */
+export type ParasutActiveEDocument = {
+  formalId: string
+  invoiceType: ParasutInvoiceType
+  invoiceNumber?: string
+  uuid?: string
+  issueDate?: string
+}
+
+type JsonApiResource = {
+  id?: string
+  type?: string
+  attributes?: Record<string, unknown>
+  relationships?: Record<string, { data?: { id?: string; type?: string } | null }>
 }
 
 const RETRYABLE = (status: number) => status === 429 || status >= 500
@@ -142,14 +165,9 @@ export function retryAfterMs(err: ParasutError): number | null {
 
 export class ParasutClient {
   readonly baseUrl: string
-  readonly oauthUrl: string
   readonly mockMode: boolean
   readonly companyId: string
 
-  private readonly clientId: string
-  private readonly clientSecret: string
-  private readonly username: string
-  private readonly password: string
   private readonly timeoutMs: number
   private readonly maxRetries: number
   private readonly dryRun: boolean
@@ -157,9 +175,12 @@ export class ParasutClient {
   private readonly shippingProductId: string
   private readonly shippingProductCode: string
   private readonly transport: ParasutTransport
+  private readonly tokenProvider?: ParasutTokenProvider
+  private readonly eInvoiceScenario: ParasutOptions["eInvoiceScenario"]
+  private readonly jobWaitMs: number
+  private readonly pollIntervalMs: number
   private readonly logger?: ParasutClientOptions["logger"]
   private mockBehavior_: ParasutMockBehavior
-  private token_: TokenState | null = null
   private readonly productCache_ = new Map<string, string>()
 
   /** Son oluşturulan sales invoice payload (mock + live inspection). */
@@ -173,13 +194,12 @@ export class ParasutClient {
   requestAttempts = 0
 
   constructor(options: ParasutClientOptions) {
-    this.clientId = options.clientId
-    this.clientSecret = options.clientSecret
-    this.username = options.username
-    this.password = options.password
     this.companyId = options.companyId
     this.baseUrl = options.baseUrl.replace(/\/$/, "")
-    this.oauthUrl = options.oauthUrl.replace(/\/$/, "")
+    this.tokenProvider = options.tokenProvider
+    this.eInvoiceScenario = options.eInvoiceScenario || "basic"
+    this.jobWaitMs = options.jobWaitMs ?? 60_000
+    this.pollIntervalMs = options.pollIntervalMs ?? 2_000
     this.timeoutMs = options.timeoutMs
     this.maxRetries = options.maxRetries
     this.dryRun = isParasutDryRun(options)
@@ -297,14 +317,28 @@ export class ParasutClient {
     this.lastSalesInvoiceInput = withProducts
     this.lastSalesInvoicePayload = liveBody
 
-    // 5xx / zaman aşımında kayıt açılmış olabilir: kör tekrar çift satış faturası yazar
-    // (stok da iki kez düşer). Yalnız 429 (işlenmedi) tekrar denenir.
-    const created = await this.requestJson<{ data?: { id?: string } }>(
-      "POST",
-      `/${this.companyId}/sales_invoices`,
-      liveBody,
-      { retryOnlyRateLimit: true }
-    )
+    // 5xx / zaman aşımında kayıt açılmış olabilir. external_reference_key aynı anahtarla
+    // ikinci faturayı Paraşüt tarafında reddeder (422 + mevcut fatura id); yine de burada
+    // yalnız 429 (işlenmedi) tekrar denenir, belirsiz sonuç çağırana `unknown` olarak döner
+    // ve findSalesInvoiceByReferenceKey ile çözülür.
+    let created: { data?: { id?: string } }
+    try {
+      created = await this.requestJson<{ data?: { id?: string } }>(
+        "POST",
+        `/${this.companyId}/sales_invoices`,
+        liveBody,
+        { retryOnlyRateLimit: true }
+      )
+    } catch (err) {
+      const existingId = input.referenceKey ? existingInvoiceIdFromKeyConflict(err) : null
+      if (existingId) {
+        this.logger?.warn(
+          `[parasut] sales invoice zaten açılmış (external_reference_key) order=${input.orderId} invoice=${existingId}`
+        )
+        return { invoiceId: existingId, existing: true }
+      }
+      throw err
+    }
     const id = created?.data?.id
     if (!id) {
       throw new ParasutError("Parasut sales invoice create: missing id", {
@@ -312,6 +346,28 @@ export class ParasutClient {
       })
     }
     return { invoiceId: String(id) }
+  }
+
+  /**
+   * external_reference_key ile açılmış satış faturası. Yoksa null (Paraşüt gövdesiz 404 döner).
+   * Belirsiz kalan oluşturma isteğinin sonucunu kesinleştirir.
+   */
+  async findSalesInvoiceByReferenceKey(referenceKey: string): Promise<string | null> {
+    if (this.mockMode) {
+      return this.mockBehavior_.referenceKeyInvoiceId ?? null
+    }
+    try {
+      const res = await this.requestJson<{ data?: { id?: string } }>(
+        "GET",
+        `/${this.companyId}/sales_invoices/find_by_external_reference_key?external_reference_key=${encodeURIComponent(referenceKey)}`,
+        undefined,
+        { allowEmpty: true }
+      )
+      return res?.data?.id ? String(res.data.id) : null
+    } catch (err) {
+      if (err instanceof ParasutError && err.status === 404) return null
+      throw err
+    }
   }
 
   /**
@@ -510,7 +566,11 @@ export class ParasutClient {
   }
 
   /**
-   * VKN e-fatura mükellefi mi → e_invoice, değilse e_archive.
+   * Satış faturasını resmileştir: alıcı e-fatura mükellefiyse e-fatura, değilse e-arşiv.
+   *
+   * Tekrar çağrıya dayanıklı: faturanın zaten aktif e-belgesi varsa yeni belge POST edilmez.
+   * Paraşüt e-belgeyi arka planda keser (202 + trackable job); iş bitene kadar beklenir,
+   * belge numarası faturanın active_e_document'ından okunur.
    */
   async finalizeInvoice(
     input: ParasutFinalizeInput
@@ -526,97 +586,206 @@ export class ParasutClient {
       return mockFinalizeInvoice(input)
     }
 
-    const invoiceType = await this.checkVknType(input.taxNumber)
-    const endpoint =
+    const before = await this.getSalesInvoiceEDocument(input.invoiceId)
+    if (before.document) {
+      this.logger?.info(
+        `[parasut] finalize: fatura zaten resmileşmiş invoice=${input.invoiceId} ${before.document.invoiceType}=${before.document.formalId}`
+      )
+      return toFinalizeResult(input.invoiceId, before.document)
+    }
+
+    const issueDate = before.issueDate || new Date().toISOString().slice(0, 10)
+    const recipient = await this.checkVknType(input.taxNumber, issueDate)
+    const invoiceType = recipient.type
+
+    const body =
       invoiceType === "e_invoice"
-        ? `/${this.companyId}/e_invoices`
-        : `/${this.companyId}/e_archives`
-
-    const body: {
-      data: {
-        type: string
-        attributes?: {
-          internet_sale?: {
-            url: string
-            payment_type: string
-            payment_platform: string
-            payment_date: string
+        ? {
+            data: {
+              type: "e_invoices",
+              attributes: {
+                scenario: this.eInvoiceScenario,
+                to: recipient.address,
+              },
+              relationships: {
+                invoice: { data: { type: "sales_invoices", id: input.invoiceId } },
+              },
+            },
           }
-        }
-        relationships: {
-          sales_invoice: {
-            data: { type: string; id: string }
+        : {
+            data: {
+              type: "e_archives",
+              // e-Arşiv: internet satışında internet_sale zorunlu (GİB e-ticaret)
+              ...(input.internetSale
+                ? {
+                    attributes: {
+                      internet_sale: {
+                        url: input.internetSale.url,
+                        payment_type: input.internetSale.payment_type,
+                        payment_platform: input.internetSale.payment_platform,
+                        payment_date: input.internetSale.payment_date,
+                      },
+                    },
+                  }
+                : {}),
+              relationships: {
+                sales_invoice: { data: { type: "sales_invoices", id: input.invoiceId } },
+              },
+            },
           }
-        }
-      }
-    } = {
-      data: {
-        type: invoiceType === "e_invoice" ? "e_invoices" : "e_archives",
-        relationships: {
-          sales_invoice: {
-            data: { type: "sales_invoices", id: input.invoiceId },
-          },
-        },
-      },
+
+    const job = await this.requestJson<{ data?: JsonApiResource }>(
+      "POST",
+      `/${this.companyId}/${invoiceType === "e_invoice" ? "e_invoices" : "e_archives"}`,
+      body,
+      // İstek işlenmiş olabilir; tekrar denemede önce aktif e-belgeye bakılır (yukarıda).
+      { retryOnlyRateLimit: true }
+    )
+    const jobId = job?.data?.type === "trackable_jobs" ? job.data.id : undefined
+    if (jobId) {
+      await this.waitForTrackableJob(String(jobId), `${invoiceType} invoice=${input.invoiceId}`)
     }
 
-    // e-Arşiv: GİB internet satışı zorunlu (e-ticaret)
-    if (invoiceType === "e_archive" && input.internetSale) {
-      body.data.attributes = {
-        internet_sale: {
-          url: input.internetSale.url,
-          payment_type: input.internetSale.payment_type,
-          payment_platform: input.internetSale.payment_platform,
-          payment_date: input.internetSale.payment_date,
-        },
-      }
+    const after = await this.getSalesInvoiceEDocument(input.invoiceId)
+    if (!after.document) {
+      throw new ParasutError(
+        `Paraşüt e-belge işi bitti ama faturada aktif e-belge yok (invoice=${input.invoiceId}). Tekrar denenecek.`,
+        { retryable: true, responseBody: job }
+      )
     }
+    return toFinalizeResult(input.invoiceId, after.document)
+  }
 
-    const created = await this.requestJson<{
-      data?: {
-        id?: string
-        attributes?: { invoice_no?: string; uuid?: string }
-      }
-    }>("POST", endpoint, body)
+  /** Token sahibinin erişebildiği Paraşüt firma numaraları (GET /me?include=companies). */
+  async listAccessibleCompanyIds(): Promise<string[]> {
+    if (this.mockMode) return [this.companyId]
+    const res = await this.requestJson<{ included?: JsonApiResource[] }>(
+      "GET",
+      "/me?include=companies"
+    )
+    return (res?.included || [])
+      .filter((r) => r.type === "companies" && r.id)
+      .map((r) => String(r.id))
+  }
 
-    const formalId = created?.data?.id
-    if (!formalId) {
-      throw new ParasutError("Parasut finalize: missing formal id", {
-        responseBody: created,
-      })
+  /** Satış faturası + aktif e-belgesi (include=active_e_document). */
+  async getSalesInvoiceEDocument(invoiceId: string): Promise<{
+    issueDate?: string
+    invoiceNo?: string
+    document: ParasutActiveEDocument | null
+  }> {
+    const res = await this.requestJson<{
+      data?: JsonApiResource
+      included?: JsonApiResource[]
+    }>(
+      "GET",
+      `/${this.companyId}/sales_invoices/${encodeURIComponent(invoiceId)}?include=active_e_document`
+    )
+    const attrs = res?.data?.attributes || {}
+    const invoiceNo = typeof attrs.invoice_no === "string" && attrs.invoice_no ? attrs.invoice_no : undefined
+    const issueDate = typeof attrs.issue_date === "string" ? attrs.issue_date.slice(0, 10) : undefined
+    const rel = res?.data?.relationships?.active_e_document?.data
+    if (!rel?.id) return { issueDate, invoiceNo, document: null }
+    const doc = (res?.included || []).find((r) => r.id === rel.id && r.type === rel.type)
+    const docAttrs = doc?.attributes || {}
+    const invoiceType: ParasutInvoiceType | null =
+      rel.type === "e_invoices" ? "e_invoice" : rel.type === "e_archives" ? "e_archive" : null
+    if (!invoiceType) {
+      // e_smms vb. — bu entegrasyon kesmez; resmileşmiş sayma.
+      return { issueDate, invoiceNo, document: null }
     }
-
+    const number =
+      (typeof docAttrs.invoice_number === "string" && docAttrs.invoice_number) || invoiceNo
     return {
-      invoiceId: input.invoiceId,
-      formalId: String(formalId),
-      invoiceType,
-      invoiceNumber:
-        created?.data?.attributes?.invoice_no ||
-        `${invoiceType}-${formalId}`,
-      uuid: created?.data?.attributes?.uuid,
+      issueDate,
+      invoiceNo,
+      document: {
+        formalId: String(rel.id),
+        invoiceType,
+        invoiceNumber: number || undefined,
+        uuid: typeof docAttrs.uuid === "string" ? docAttrs.uuid : undefined,
+        issueDate,
+      },
     }
   }
 
-  async getInvoicePdf(invoiceId: string): Promise<ParasutPdfResult> {
+  /** trackable_jobs: running → done | error. Süre aşılırsa tekrar denenebilir hata. */
+  private async waitForTrackableJob(jobId: string, label: string): Promise<void> {
+    const deadline = Date.now() + this.jobWaitMs
+    for (;;) {
+      const res = await this.requestJson<{ data?: JsonApiResource }>(
+        "GET",
+        `/${this.companyId}/trackable_jobs/${encodeURIComponent(jobId)}`
+      )
+      const attrs = res?.data?.attributes || {}
+      const status = String(attrs.status || "")
+      if (status === "done") return
+      if (status === "error") {
+        const errors = Array.isArray(attrs.errors) ? attrs.errors.map(String).join("; ") : ""
+        throw new ParasutError(`Paraşüt e-belge kesilemedi (${label}): ${errors || "bilinmeyen hata"}`, {
+          responseBody: res,
+          retryable: false,
+        })
+      }
+      if (Date.now() >= deadline) {
+        throw new ParasutError(
+          `Paraşüt e-belge işi ${Math.round(this.jobWaitMs / 1000)} sn'de bitmedi (${label}, job=${jobId}). Tekrar denemede aktif e-belge kontrol edilir.`,
+          { retryable: true }
+        )
+      }
+      await sleep(this.pollIntervalMs)
+    }
+  }
+
+  /**
+   * e-belge PDF'i. Paraşüt'ün verdiği adres süreli (expires_at); kalıcı saklamayın,
+   * gerektiğinde yeniden isteyin. PDF hazır değilse 204 döner, kısa süre beklenir.
+   */
+  async getInvoicePdf(
+    invoiceId: string,
+    formal?: { formalId?: string | null; invoiceType?: ParasutInvoiceType | null }
+  ): Promise<ParasutPdfResult> {
     if (this.mockMode) {
       this.throwIfMockFail("getInvoicePdf")
       this.logger?.info(`[parasut] mock getInvoicePdf invoice=${invoiceId}`)
       return mockGetInvoicePdf(invoiceId)
     }
 
-    // PDF URL genelde e_archive / e_invoice show yanıtında gelir — iskelet.
-    const res = await this.requestJson<{
-      data?: { attributes?: { pdf_url?: string; url?: string } }
-    }>("GET", `/${this.companyId}/sales_invoices/${invoiceId}`)
-
-    const pdfUrl =
-      res?.data?.attributes?.pdf_url || res?.data?.attributes?.url || ""
-    if (!pdfUrl) {
-      throw new ParasutError("Parasut PDF URL missing", { responseBody: res })
+    let formalId = formal?.formalId || ""
+    let invoiceType = formal?.invoiceType || null
+    if (!formalId || !invoiceType) {
+      const { document } = await this.getSalesInvoiceEDocument(invoiceId)
+      if (!document) {
+        throw new ParasutError(`Faturanın e-belgesi yok, PDF alınamaz (invoice=${invoiceId})`, {
+          retryable: false,
+        })
+      }
+      formalId = document.formalId
+      invoiceType = document.invoiceType
     }
-    return { invoiceId, pdfUrl }
+    const path = `/${this.companyId}/${invoiceType === "e_invoice" ? "e_invoices" : "e_archives"}/${encodeURIComponent(formalId)}/pdf`
+    const deadline = Date.now() + Math.min(this.jobWaitMs, 20_000)
+    for (;;) {
+      const res = await this.requestJson<{ data?: JsonApiResource }>("GET", path, undefined, {
+        allowEmpty: true,
+      })
+      const url = res?.data?.attributes?.url
+      if (typeof url === "string" && url) {
+        const expires = res?.data?.attributes?.expires_at
+        return {
+          invoiceId,
+          pdfUrl: url,
+          expiresAt: typeof expires === "string" ? expires : undefined,
+        }
+      }
+      if (Date.now() >= deadline) {
+        throw new ParasutError(`Paraşüt PDF henüz hazır değil (invoice=${invoiceId})`, {
+          retryable: true,
+        })
+      }
+      await sleep(this.pollIntervalMs)
+    }
   }
-
   async cancelInvoice(invoiceId: string): Promise<ParasutCancelResult> {
     if (this.mockMode) {
       this.logger?.info(`[parasut] mock cancelInvoice invoice=${invoiceId}`)
@@ -685,133 +854,90 @@ export class ParasutClient {
     }
   }
 
-  /** VKN e-fatura inbox'ta kayıtlı mı? */
+  /**
+   * Alıcı e-fatura mükellefi mi? (e_invoice_inbox_checks — GİB hesap kapatma listesiyle)
+   * Liste doluysa e-fatura (posta kutusu adresiyle), boşsa e-arşiv.
+   *
+   * Kontrol yapılamazsa (503 / ağ) e-arşive DÜŞÜLMEZ: mükellefe e-arşiv kesmek hatalı belge
+   * olur. Hata fırlatılır, resmileştirme sonra tekrar denenir.
+   * Hesabı kapanmış VKN'ye fatura kesilemez: 422 → tekrar denenmeyen hata.
+   */
   async checkVknType(
-    taxNumber?: string | null
-  ): Promise<"e_archive" | "e_invoice"> {
+    taxNumber?: string | null,
+    issueDate?: string
+  ): Promise<{ type: ParasutInvoiceType; address?: string }> {
     if (this.mockMode) {
       if (this.mockBehavior_.failOn === "checkVkn") {
-        this.logger?.warn(
-          "[parasut] mock checkVkn forced fail — fallback e_archive"
-        )
-        return "e_archive"
+        throw new ParasutError("Parasut mock forced failure: checkVkn", {
+          status: 503,
+          retryable: true,
+        })
       }
       // Mock simülasyon: 10 haneli + "9" ile başlayan → e_invoice (kayıtlı);
       // diğer VKN / TCKN / yok → e_archive (kayıtsız).
-      return resolveMockInvoiceType(taxNumber)
+      const type = resolveMockInvoiceType(taxNumber)
+      return type === "e_invoice"
+        ? { type, address: "urn:mail:defaultpk@mock.parasut" }
+        : { type }
     }
 
     const digits = (taxNumber || "").replace(/\D/g, "")
-    if (digits.length !== 10) {
-      return "e_archive"
+    // Vergi/TC kimlik no yoksa ya da nihai tüketici yer tutucusu (11111111111) → e-arşiv.
+    // TCKN de sorgulanır: şahıs şirketleri TCKN ile e-fatura mükellefi olabilir.
+    if ((digits.length !== 10 && digits.length !== 11) || /^1{11}$/.test(digits)) {
+      return { type: "e_archive" }
     }
+    const date = issueDate || new Date().toISOString().slice(0, 10)
 
+    let res: { data?: JsonApiResource[] }
     try {
-      const res = await this.requestJson<{ data?: unknown[] }>(
+      res = await this.requestJson<{ data?: JsonApiResource[] }>(
         "GET",
-        `/${this.companyId}/e_invoice_inboxes?filter[vkn]=${encodeURIComponent(digits)}`,
+        `/${this.companyId}/e_invoice_inbox_checks?tax_number=${encodeURIComponent(digits)}&issue_date=${encodeURIComponent(date)}`,
         undefined,
         { allowEmpty: true }
       )
-      if (Array.isArray(res?.data) && res.data.length > 0) {
-        return "e_invoice"
-      }
     } catch (err) {
-      this.logger?.warn(
-        `[parasut] checkVknType failed — fallback e_archive: ${String(err)}`
-      )
-    }
-    return "e_archive"
-  }
-
-  // --- OAuth + HTTP ---
-
-  private async ensureAccessToken(): Promise<string> {
-    const now = Date.now()
-    if (this.token_ && this.token_.expiresAt > now + 30_000) {
-      return this.token_.accessToken
-    }
-
-    if (this.token_?.refreshToken) {
-      try {
-        await this.fetchToken({
-          grant_type: "refresh_token",
-          refresh_token: this.token_.refreshToken,
-        })
-        return this.token_!.accessToken
-      } catch (err) {
-        this.logger?.warn(
-          `[parasut] refresh_token failed — password grant fallback: ${String(err)}`
+      if (err instanceof ParasutError && err.status === 422) {
+        throw new ParasutError(
+          `Alıcıya bu tarihle fatura kesilemez (e-belge hesabı kapalı): ${firstErrorDetail(err.responseBody) || err.message}`,
+          { status: 422, responseBody: err.responseBody, retryable: false }
         )
       }
-    }
-
-    await this.fetchToken({
-      grant_type: "password",
-      username: this.username,
-      password: this.password,
-    })
-    return this.token_!.accessToken
-  }
-
-  private async fetchToken(params: Record<string, string>): Promise<void> {
-    const body = new URLSearchParams({
-      client_id: this.clientId,
-      client_secret: this.clientSecret,
-      ...params,
-    })
-
-    const url = `${this.oauthUrl}/oauth/token`
-    const res = await this.transport(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        Accept: "application/json",
-      },
-      body: body.toString(),
-    })
-    const text = await res.text()
-    let json: {
-      access_token?: string
-      refresh_token?: string
-      expires_in?: number
-      error?: string
-    } = {}
-    try {
-      json = text ? JSON.parse(text) : {}
-    } catch {
-      const bodyText = formatParasutErrorBody(text)
-      this.logger?.error(
-        `Parasut OAuth non-JSON ${res.status} body=${bodyText || "(empty)"}`
-      )
       throw new ParasutError(
-        `OAuth non-JSON (${res.status})${bodyText ? ` ${formatParasutErrorBody(text, ERROR_BODY_MESSAGE_MAX)}` : ""}`,
+        `Alıcının e-fatura durumu kontrol edilemedi; belge gönderilmedi, tekrar denenecek: ${String(err instanceof Error ? err.message : err)}`,
         {
-          status: res.status,
-          responseBody: text,
+          status: err instanceof ParasutError ? err.status : undefined,
+          responseBody: err instanceof ParasutError ? err.responseBody : undefined,
+          retryable: true,
         }
       )
     }
-    if (!res.ok || !json.access_token) {
-      const rawBody = json
-      const bodyText = formatParasutErrorBody(rawBody)
-      this.logger?.error(
-        `Parasut OAuth HTTP ${res.status} body=${bodyText || "(empty)"}`
-      )
-      throw new ParasutError(
-        `OAuth failed: ${json.error || res.status}${
-          bodyText ? ` ${formatParasutErrorBody(rawBody, ERROR_BODY_MESSAGE_MAX)}` : ""
-        }`,
-        { status: res.status, responseBody: json, retryable: RETRYABLE(res.status) }
-      )
+    const inboxes = Array.isArray(res?.data) ? res.data : []
+    if (!inboxes.length) return { type: "e_archive" }
+    const address = inboxes
+      .map((i) => i.attributes?.e_invoice_address)
+      .find((a): a is string => typeof a === "string" && a.length > 0)
+    if (!address) {
+      throw new ParasutError("Alıcı e-fatura mükellefi ama posta kutusu adresi yok", {
+        responseBody: res,
+        retryable: false,
+      })
     }
-    this.token_ = {
-      accessToken: json.access_token,
-      refreshToken: json.refresh_token,
-      expiresAt: Date.now() + (Number(json.expires_in) || 7200) * 1000,
-    }
+    return { type: "e_invoice", address }
   }
 
+  // --- HTTP ---
+
+  private async accessToken(): Promise<string> {
+    if (!this.tokenProvider) {
+      throw new ParasutError(
+        "Paraşüt bağlantısı yok: Admin → Paraşüt sayfasından 'Paraşüt'e bağlan' yapın.",
+        { retryable: false }
+      )
+    }
+    return this.tokenProvider.getAccessToken()
+  }
   private async requestJson<T = unknown>(
     method: string,
     path: string,
@@ -819,11 +945,12 @@ export class ParasutClient {
     opts?: { allowEmpty?: boolean; retryOnlyRateLimit?: boolean }
   ): Promise<T> {
     let lastError: unknown
+    let reauthorized = false
 
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
       this.requestAttempts += 1
       try {
-        const token = await this.ensureAccessToken()
+        const token = await this.accessToken()
         const controller = new AbortController()
         const timer = setTimeout(() => controller.abort(), this.timeoutMs)
         try {
@@ -837,6 +964,14 @@ export class ParasutClient {
             body: body !== undefined ? JSON.stringify(body) : undefined,
             signal: controller.signal,
           })
+          // Süresi beklenenden önce dolmuş token: bir kez yenileyip aynı isteği tekrarla
+          // (401'de istek işlenmemiştir). İkinci 401 hatadır; Paraşüt çok 401 alan istemciyi kapatır.
+          if (res.status === 401 && !reauthorized && this.tokenProvider) {
+            reauthorized = true
+            this.tokenProvider.invalidate(token)
+            attempt -= 1
+            continue
+          }
           const text = await res.text()
           let json: T | null = null
           if (text) {
@@ -912,6 +1047,38 @@ export class ParasutClient {
     throw lastError instanceof Error
       ? lastError
       : new ParasutError(String(lastError))
+  }
+}
+
+/** 422 "Bu key ile daha önce bir fatura oluşturulmuş." → mevcut fatura id (meta.sales_invoice_id). */
+export function existingInvoiceIdFromKeyConflict(err: unknown): string | null {
+  if (!(err instanceof ParasutError) || err.status !== 422) return null
+  const body = err.responseBody as {
+    errors?: { meta?: { sales_invoice_id?: unknown } }[]
+    meta?: { sales_invoice_id?: unknown }
+  } | null
+  const id =
+    body?.errors?.find((e) => e?.meta?.sales_invoice_id != null)?.meta?.sales_invoice_id ??
+    body?.meta?.sales_invoice_id
+  return id != null && String(id) ? String(id) : null
+}
+
+function firstErrorDetail(body: unknown): string {
+  const errors = (body as { errors?: { detail?: unknown; title?: unknown }[] } | null)?.errors
+  const first = Array.isArray(errors) ? errors[0] : undefined
+  return first ? String(first.detail || first.title || "") : ""
+}
+
+function toFinalizeResult(
+  invoiceId: string,
+  doc: ParasutActiveEDocument
+): ParasutFinalizeResult {
+  return {
+    invoiceId,
+    formalId: doc.formalId,
+    invoiceType: doc.invoiceType,
+    invoiceNumber: doc.invoiceNumber || `${doc.invoiceType}-${doc.formalId}`,
+    uuid: doc.uuid,
   }
 }
 

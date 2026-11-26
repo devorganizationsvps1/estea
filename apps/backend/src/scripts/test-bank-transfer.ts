@@ -113,8 +113,6 @@ function confirmBlockedReason(): string | null {
   const parasut = normalizeParasutOptions({
     clientId: process.env.PARASUT_CLIENT_ID,
     clientSecret: process.env.PARASUT_CLIENT_SECRET,
-    username: process.env.PARASUT_USERNAME,
-    password: process.env.PARASUT_PASSWORD,
     companyId: process.env.PARASUT_COMPANY_ID,
     dryRun: process.env.PARASUT_DRY_RUN,
   })

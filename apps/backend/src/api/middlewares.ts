@@ -36,6 +36,13 @@ const carrierWebhookRateLimit = createRateLimiter({
   windowMs: Number(process.env.CARRIER_WEBHOOK_RATE_WINDOW_MS || 60 * 1000),
   message: "Too many requests.",
 })
+// Paraşüt OAuth dönüşü ve fatura PDF bağlantısı: AUTH yok (tarayıcı/müşteri açar).
+const parasutPublicRateLimit = createRateLimiter({
+  name: "parasut-public",
+  maxAttempts: Number(process.env.PARASUT_PUBLIC_RATE_MAX || 30),
+  windowMs: Number(process.env.PARASUT_PUBLIC_RATE_WINDOW_MS || 60 * 1000),
+  message: "Çok fazla istek. Lütfen biraz sonra tekrar deneyin.",
+})
 import { lookupRateLimit } from "./store/orders/lookup/rate-limit"
 import { exchangeOptionsRateLimit } from "./store/returns/exchange-options/rate-limit"
 import {
@@ -134,6 +141,12 @@ export default defineMiddlewares({
       matcher: "/paytr/callback",
       methods: ["POST"],
       middlewares: [paytrCallbackRateLimit],
+    },
+    // Paraşüt: OAuth geri dönüşü (state ile doğrulanır) + imzalı fatura PDF bağlantısı
+    {
+      matcher: "/parasut/*",
+      methods: ["GET"],
+      middlewares: [parasutPublicRateLimit],
     },
     // Kargo firması durum webhook'u: AUTH yok — firma sunucusu erişmeli.
     // Doğrulama rotada (CARRIER_WEBHOOK_SECRET) + adaptörün parseWebhook'unda (imza).

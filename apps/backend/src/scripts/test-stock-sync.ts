@@ -15,6 +15,9 @@ export default async function testStockSync({ container }: ExecArgs) {
   if (!parasut.isStockConfigured()) {
     throw new Error("Paraşüt kimlikleri boş (PARASUT_CLIENT_ID …); mock modda okunacak stok yok.")
   }
+  if (!(await parasut.isConnected())) {
+    throw new Error("Paraşüt bağlantısı yok: Admin → Paraşüt sayfasından 'Paraşüt'e bağlan' yapın.")
+  }
 
   const result = await syncStock(container, { apply: false })
   if (result.status === "disabled") return
